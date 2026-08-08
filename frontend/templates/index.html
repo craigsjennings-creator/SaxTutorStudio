@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>YourMusicTutorial</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #111318;
+            color: white;
+        }
+
+        .container {
+            width: min(900px, 92%);
+            margin: 0 auto;
+            padding: 70px 0;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 42px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .tagline {
+            font-size: 20px;
+            color: #aaa;
+            margin-bottom: 55px;
+        }
+
+        .card {
+            background: #1b1e25;
+            border: 1px solid #30343d;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: left;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        .upload-area {
+            margin: 30px 0;
+            padding: 45px;
+            border: 2px dashed #444b57;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        input[type="file"] {
+            margin-top: 20px;
+        }
+
+        .instruments {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .instrument {
+            flex: 1;
+            min-width: 150px;
+            padding: 18px;
+            border: 1px solid #444b57;
+            border-radius: 10px;
+            background: #15181e;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .instrument:hover,
+        .instrument.selected {
+            border-color: #5b8cff;
+            background: #20283a;
+        }
+
+        .button {
+            width: 100%;
+            margin-top: 30px;
+            padding: 18px;
+            border: 0;
+            border-radius: 10px;
+            background: #4f7cff;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            background: #638cff;
+        }
+
+        #result {
+            display: none;
+            margin-top: 30px;
+            padding: 25px;
+            background: #15181e;
+            border-radius: 10px;
+            white-space: pre-wrap;
+        }
+
+        .notes {
+            font-family: monospace;
+            font-size: 18px;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="logo">🎵 YourMusicTutorial</div>
+
+    <div class="tagline">
+        Any song. Any instrument. Your tutorial.
+    </div>
+
+    <div class="card">
+
+        <h2>Create your tutorial</h2>
+
+        <div class="upload-area">
+
+            <div>
+                Choose a MusicXML file to get started.
+            </div>
+
+            <input
+                type="file"
+                id="musicFile"
+                accept=".musicxml,.xml"
+            >
+
+        </div>
+
+        <h3>Choose your instrument</h3>
+
+        <div class="instruments">
+
+            <button
+                class="instrument selected"
+                data-instrument="alto-sax"
+            >
+                🎷 Alto Sax
+            </button>
+
+            <button
+                class="instrument"
+                data-instrument="tenor-sax"
+            >
+                🎷 Tenor Sax
+            </button>
+
+        </div>
+
+        <button
+            class="button"
+            onclick="createTutorial()"
+        >
+            Create Tutorial
+        </button>
+
+        <div id="result"></div>
+
+    </div>
+
+</div>
+
+<script>
+
+let selectedInstrument = "alto-sax";
+
+document.querySelectorAll(".instrument").forEach(button => {
+
+    button.addEventListener("click", () => {
+
+        document.querySelectorAll(".instrument")
+            .forEach(b => b.classList.remove("selected"));
+
+        button.classList.add("selected");
+
+        selectedInstrument = button.dataset.instrument;
+
+    });
+
+});
+
+
+async function createTutorial() {
+
+    const fileInput = document.getElementById("musicFile");
+    const result = document.getElementById("result");
+
+    if (!fileInput.files.length) {
+
+        alert("Please choose a MusicXML file first.");
+        return;
+
+    }
+
+    const formData = new FormData();
+
+    formData.append("file", fileInput.files[0]);
+    formData.append("instrument", selectedInstrument);
+
+    result.style.display = "block";
+    result.textContent = "🎵 Analysing your music...";
+
+    try {
+
+        const response = await fetch("/api/analyse", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || "Something went wrong.");
+        }
+
+        result.innerHTML =
+            "<strong>🎷 Notes detected</strong><br><br>" +
+            "<div class='notes'>" +
+            data.notes.join("<br>") +
+            "</div>";
+
+    } catch (error) {
+
+        result.textContent =
+            "Error: " + error.message;
+
+    }
+
+}
+
+</script>
+
+</body>
+</html>
