@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from parser.musicxml_parser import load_musicxml
+
 
 class MainWindow(QMainWindow):
     """Main SaxTutor Studio application window."""
@@ -32,38 +34,32 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
 
-        # Application title
         title = QLabel("🎷 SaxTutor Studio")
         title.setObjectName("title")
         layout.addWidget(title)
 
-        # Subtitle
         subtitle = QLabel(
             "Turn sheet music into interactive saxophone tutorials"
         )
         subtitle.setObjectName("subtitle")
         layout.addWidget(subtitle)
 
-        # Separator
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.HLine)
         separator.setObjectName("separator")
         layout.addWidget(separator)
 
-        # Open MusicXML button
         open_button = QPushButton("📂  Open MusicXML")
         open_button.setObjectName("openButton")
         open_button.setMinimumHeight(55)
         open_button.clicked.connect(self.open_musicxml)
         layout.addWidget(open_button)
 
-        # Current file
         self.file_label = QLabel("No score loaded")
         self.file_label.setObjectName("fileLabel")
         self.file_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.file_label)
 
-        # Notes area
         notes_title = QLabel("Notes")
         notes_title.setObjectName("sectionTitle")
         layout.addWidget(notes_title)
@@ -78,20 +74,49 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.notes_label, 1)
 
     def open_musicxml(self):
-        """Open a MusicXML file."""
+        """Open and parse a MusicXML file."""
 
         filename, _ = QFileDialog.getOpenFileName(
             self,
             "Open MusicXML",
             "",
-            "MusicXML Files (*.musicxml *.xml)"
+            "MusicXML Files (*.musicxml *.xml)",
         )
 
-        if filename:
+        if not filename:
+            return
+
+        try:
+            notes = load_musicxml(filename)
+
             self.file_label.setText(filename)
+
+            if not notes:
+                self.notes_label.setText(
+                    "The MusicXML file contains no notes."
+                )
+                return
+
+            note_lines = []
+
+            for musical_note in notes:
+                if musical_note.is_rest:
+                    note_lines.append(
+                        f"Rest    {musical_note.duration} beats"
+                    )
+                else:
+                    note_lines.append(
+                        f"{musical_note.pitch:<6} "
+                        f"{musical_note.duration} beats"
+                    )
+
             self.notes_label.setText(
-                "MusicXML selected.\n\n"
-                "The music parser will be connected here next."
+                "\n".join(note_lines)
+            )
+
+        except Exception as error:
+            self.notes_label.setText(
+                f"Could not load the MusicXML file.\n\n{error}"
             )
 
     def apply_theme(self):
