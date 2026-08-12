@@ -7,6 +7,172 @@
     <title>YourMusicTutorial</title>
 
     <style>
+        .fingering-card {
+    margin-top: 30px;
+    padding: 30px;
+    background: #15181e;
+    border-radius: 12px;
+    text-align: center;
+}
+.sax-visual {
+    width: min(420px, 90%);
+    margin: 0 auto;
+}
+
+.sax-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 650px;
+}
+
+.fingering-note {
+    font-size: 42px;
+    font-weight: bold;
+    margin: 20px;
+}
+
+.sax-body {
+    width: 180px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #252a33;
+    border-radius: 20px;
+}
+
+.hand-title {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #888;
+    margin: 10px;
+}
+
+.finger {
+    width: 55px;
+    height: 55px;
+    margin: 8px auto;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #363c47;
+    color: #aaa;
+    font-weight: bold;
+    transition:
+        background 0.2s ease,
+        transform 0.2s ease;
+}
+
+.finger.pressed {
+    background: #4f7cff;
+    color: white;
+    transform: scale(1.08);
+}
+
+.sax-divider {
+    height: 2px;
+    background: #444b57;
+    margin: 18px 20px;
+}
+
+.note-buttons {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 25px;
+}
+
+.note-button {
+    padding: 10px 16px;
+    border: 1px solid #444b57;
+    border-radius: 8px;
+    background: #20242b;
+    color: white;
+    cursor: pointer;
+}
+
+.note-button:hover {
+    background: #292f3a;
+}
+
+.note-button.active {
+    background: #4f7cff;
+    border-color: #4f7cff;
+}
+
+.unavailable {
+    color: #888;
+    padding: 30px;
+}
+.detected-note {
+    display: inline-block;
+    margin: 5px;
+    padding: 8px 14px;
+
+    border: 1px solid #444b57;
+    border-radius: 7px;
+
+    background: #20242b;
+    color: white;
+
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 16px;
+}
+
+.detected-note:hover {
+    background: #292f3a;
+}
+
+.detected-note.active {
+    background: #4f7cff;
+    border-color: #4f7cff;
+}
+
+.detected-note.rest {
+    cursor: default;
+    opacity: 0.5;
+}
+
+
+.sax-key {
+    fill: #363c47;
+    stroke: #8b929d;
+    stroke-width: 3;
+    transition:
+        fill 0.2s ease,
+        filter 0.2s ease,
+        transform 0.2s ease;
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+.sax-key.active {
+    fill: #4f7cff;
+    stroke: #8db0ff;
+    filter: url(#keyGlow);
+}
+
+.sax-key.changing {
+    animation: keyChange 0.25s ease;
+}
+
+@keyframes keyChange {
+
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.18);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+
+}
         * {
             box-sizing: border-box;
         }
@@ -118,7 +284,149 @@
             font-size: 18px;
             line-height: 1.8;
         }
+
+        .player-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 25px;
+}
+
+.player-controls button {
+    padding: 12px 20px;
+    border: 1px solid #444b57;
+    border-radius: 8px;
+    background: #20242b;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.player-controls button:hover {
+    background: #292f3a;
+}
+
+.play-button {
+    min-width: 110px;
+    background: #4f7cff !important;
+    border-color: #4f7cff !important;
+}
+
+.speed-control {
+    margin-top: 15px;
+    text-align: center;
+}
+
+.speed-control select {
+    margin-left: 8px;
+    padding: 7px 12px;
+    border-radius: 6px;
+    background: #20242b;
+    color: white;
+    border: 1px solid #444b57;
+}
+
+/* =========================================
+   Tutorial Timeline
+   ========================================= */
+
+.tutorial-timeline {
+    position: relative;
+    width: 100%;
+    min-height: 520px;
+    height: auto;
+    margin-top: 30px;
+    background: #111722;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+/* Notes across the top */
+
+.timeline-notes {
+    position: relative;
+    height: 120px;
+    border-bottom: 1px solid #394252;
+}
+
+.timeline-note {
+    position: absolute;
+    top: 35px;
+    transform: translateX(calc(-50% + var(--timeline-shift, 0px)));
+    font-size: 42px;
+    font-weight: bold;
+    color: white;
+}
+
+/* Finger lanes */
+
+.finger-timeline {
+    position: relative;
+    height: auto;
+}
+
+.finger-lane {
+    position: relative;
+    height: 55px;
+    border-bottom: 1px solid #242b37;
+}
+
+.finger-number {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+
+    min-width: 42px;
+    width: auto;
+    height: 32px;
+    padding: 0 10px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #252c38;
+    color: #8992a1;
+
+    font-weight: bold;
+    z-index: 2;
+}
+
+.finger-bar {
+    position: absolute;
+    top: 8px;
+    height: 39px;
+    border-radius: 8px;
+    background: #353c48;
+    transform: translateX(var(--timeline-shift, 0px));
+    will-change: transform;
+}
+
+.finger-bar.active {
+    background: #4f7cff;
+    box-shadow: 0 0 12px rgba(79, 124, 255, 0.35);
+}
+
+/* Fixed playback position */
+
+.timeline-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 30%;
+    width: 3px;
+    background: #ffffff;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+    z-index: 10;
+}
     </style>
+
+    
+
 </head>
 
 <body>
@@ -178,8 +486,64 @@
 
         <div id="result"></div>
 
-    </div>
+     <div
+    class="player-controls"
+    id="player-controls"
+>
 
+    <button id="previous-note">
+        ◀
+    </button>
+
+    <button
+        id="play-button"
+        class="play-button"
+    >
+        ▶ Play
+    </button>
+
+    <button id="next-note">
+        ▶
+    </button>
+
+</div>
+
+<div class="speed-control">
+
+    <label for="speed">
+        Speed:
+    </label>
+
+    <select id="speed">
+
+        <option value="0.5">
+            50%
+        </option>
+
+        <option value="0.75">
+            75%
+        </option>
+
+        <option value="1" selected>
+            100%
+        </option>
+
+    </select>
+
+</div>   
+        <div class="tutorial-timeline">
+
+    <!-- Notes -->
+    <div class="timeline-notes"></div>
+
+    <!-- Finger lanes -->
+    <div class="finger-timeline" id="finger-timeline"></div>
+
+    <!-- Playback line -->
+    <div class="timeline-playhead"></div>
+
+</div>
+</div>
 </div>
 
 <script>
@@ -236,10 +600,64 @@ async function createTutorial() {
         }
 
         result.innerHTML =
-            "<strong>🎷 Notes detected</strong><br><br>" +
-            "<div class='notes'>" +
-            data.notes.join("<br>") +
-            "</div>";
+    "<strong>🎷 Notes detected</strong><br><br>" +
+    "<div class='notes' id='detected-notes'></div>";
+
+const detectedNotes =
+    document.getElementById("detected-notes");
+
+buildTutorialTimeline(data.notes);
+
+if (window.loadTutorialPlayer) {
+    window.loadTutorialPlayer(data.notes);
+}
+
+data.notes.forEach((noteData, index) => {
+
+    const noteName = noteData.pitch;
+
+    if (noteName === "REST") {
+        const rest = document.createElement("span");
+
+        rest.textContent = "REST";
+
+        rest.className = "detected-note rest";
+
+        detectedNotes.appendChild(rest);
+
+        return;
+    }
+
+    const noteButton =
+        document.createElement("button");
+
+    noteButton.textContent = noteName;
+
+    noteButton.className = "detected-note";
+
+    noteButton.addEventListener("click", () => {
+
+        document
+            .querySelectorAll(".detected-note")
+            .forEach(button =>
+                button.classList.remove("active")
+            );
+
+        noteButton.classList.add("active");
+
+        if (window.renderFingering) {
+            window.renderFingering(noteName);
+        }
+
+    });
+
+    detectedNotes.appendChild(noteButton);
+
+});
+
+if (window.createNoteButtons) {
+    window.createNoteButtons(data.notes);
+}
 
     } catch (error) {
 
@@ -250,7 +668,360 @@ async function createTutorial() {
 
 }
 
-</script>
+function buildTutorialTimeline(notes) {
 
+    const timeline =
+        document.querySelector(".tutorial-timeline");
+
+    const notesContainer =
+        timeline?.querySelector(".timeline-notes");
+
+    const fingerTimeline =
+        document.getElementById("finger-timeline");
+
+    if (!timeline || !notesContainer || !fingerTimeline) {
+        return;
+    }
+
+    notesContainer.innerHTML = "";
+    fingerTimeline.innerHTML = "";
+
+    const validNotes = notes.filter(
+        note => note.type !== "rest"
+    );
+
+    if (validNotes.length === 0) {
+        return;
+    }
+
+    /*
+     * Octave stays at the top so the lane order
+     * follows the physical layout of the saxophone.
+     */
+    const mainLanes = [
+        { key: "octave", label: "Oct" },
+        { key: "left_1", label: "L1" },
+        { key: "left_2", label: "L2" },
+        { key: "left_3", label: "L3" },
+        { key: "right_1", label: "R1" },
+        { key: "right_2", label: "R2" },
+        { key: "right_3", label: "R3" }
+    ];
+
+    const extraKeyLabels = {
+        "low_c": "Low C",
+        "low_c_sharp": "Low C#",
+        "low_b": "Low B",
+        "low_bb": "Low Bb",
+        "side_bb": "Side Bb",
+        "side_c": "Side C",
+        "side_e": "Side E",
+        "palm_d": "Palm D",
+        "palm_eb": "Palm Eb",
+        "palm_f": "Palm F"
+    };
+
+    const usedExtraKeys = new Set();
+
+    validNotes.forEach(noteData => {
+
+        const fingering =
+            window.SAX_FINGERINGS?.[noteData.pitch];
+
+        if (!fingering) {
+            return;
+        }
+
+        fingering.keys.forEach(key => {
+
+            if (!mainLanes.some(lane => lane.key === key)) {
+                usedExtraKeys.add(key);
+            }
+
+        });
+
+    });
+
+    const lanes = [
+        ...mainLanes,
+        ...Array.from(usedExtraKeys).map(key => ({
+            key,
+            label: extraKeyLabels[key] || key
+        }))
+    ];
+
+    lanes.forEach(laneData => {
+
+        const lane = document.createElement("div");
+        lane.className = "finger-lane";
+        lane.dataset.key = laneData.key;
+
+        const label = document.createElement("span");
+        label.className = "finger-number";
+        label.textContent = laneData.label;
+
+        lane.appendChild(label);
+        fingerTimeline.appendChild(lane);
+
+    });
+
+    const totalDuration = Math.max(
+        ...notes.map(note =>
+            note.offset + note.duration
+        )
+    );
+
+    /*
+     * Note labels across the top.
+     */
+    validNotes.forEach(noteData => {
+
+        const note = document.createElement("div");
+        note.className = "timeline-note";
+        note.textContent = noteData.pitch;
+
+        const left =
+            (noteData.offset / totalDuration) * 100;
+
+        note.style.left = `${left}%`;
+
+        notesContainer.appendChild(note);
+
+    });
+
+    /*
+     * Fingering bars.
+     */
+    validNotes.forEach(noteData => {
+
+        const fingering =
+            window.SAX_FINGERINGS?.[noteData.pitch];
+
+        if (!fingering) {
+            return;
+        }
+
+        const startPercent =
+            (noteData.offset / totalDuration) * 100;
+
+        const widthPercent =
+            (noteData.duration / totalDuration) * 100;
+
+        fingering.keys.forEach(key => {
+
+            const lane =
+                fingerTimeline.querySelector(
+                    `[data-key="${key}"]`
+                );
+
+            if (!lane) {
+                return;
+            }
+
+            const bar = document.createElement("div");
+            bar.className = "finger-bar active";
+
+            bar.style.left = `${startPercent}%`;
+            bar.style.width = `${widthPercent}%`;
+
+            bar.title = `${noteData.pitch} — ${key}`;
+
+            lane.appendChild(bar);
+
+        });
+
+    });
+
+    prepareTimelineMovement(notes);
+}
+
+
+/* =========================================================
+   Smooth scrolling timeline movement
+   ========================================================= */
+
+let timelineMovementNotes = [];
+let timelineAnimationFrame = null;
+let timelineStartedAt = 0;
+let timelineElapsedMs = 0;
+let timelineRunning = false;
+
+function getTimelineTotalBeats() {
+
+    if (!timelineMovementNotes.length) {
+        return 0;
+    }
+
+    return Math.max(
+        ...timelineMovementNotes.map(note =>
+            note.offset + note.duration
+        )
+    );
+}
+
+function getTimelineSpeed() {
+
+    const speed =
+        document.getElementById("speed");
+
+    return speed
+        ? parseFloat(speed.value)
+        : 1;
+}
+
+function setTimelineBeatPosition(beat) {
+
+    const timeline =
+        document.querySelector(".tutorial-timeline");
+
+    if (!timeline) {
+        return;
+    }
+
+    const totalBeats = getTimelineTotalBeats();
+
+    if (!totalBeats) {
+        return;
+    }
+
+    const width = timeline.clientWidth;
+
+    /*
+     * The playhead is fixed at 30% of the timeline.
+     * At beat zero, the first note sits on that line.
+     */
+    const playheadX = width * 0.30;
+
+    const progress =
+        Math.max(
+            0,
+            Math.min(1, beat / totalBeats)
+        );
+
+    const shift =
+        playheadX - (progress * width);
+
+    timeline.style.setProperty(
+        "--timeline-shift",
+        `${shift}px`
+    );
+}
+
+function prepareTimelineMovement(notes) {
+
+    timelineMovementNotes = notes;
+
+    timelineElapsedMs = 0;
+    timelineRunning = false;
+
+    if (timelineAnimationFrame) {
+        cancelAnimationFrame(timelineAnimationFrame);
+        timelineAnimationFrame = null;
+    }
+
+    setTimelineBeatPosition(0);
+}
+
+function startTimelineMovement() {
+
+    if (!timelineMovementNotes.length) {
+        return;
+    }
+
+    if (timelineRunning) {
+        return;
+    }
+
+    timelineRunning = true;
+
+    /*
+     * Our current player assumes 120 BPM:
+     * one quarter note = 500 ms.
+     */
+    const quarterNoteMs = 500;
+    const speed = getTimelineSpeed();
+
+    timelineStartedAt =
+        performance.now() - timelineElapsedMs;
+
+    function frame(now) {
+
+        if (!timelineRunning) {
+            return;
+        }
+
+        timelineElapsedMs =
+            now - timelineStartedAt;
+
+        const beat =
+            timelineElapsedMs /
+            (quarterNoteMs / speed);
+
+        const totalBeats =
+            getTimelineTotalBeats();
+
+        setTimelineBeatPosition(
+            Math.min(beat, totalBeats)
+        );
+
+        if (beat < totalBeats) {
+            timelineAnimationFrame =
+                requestAnimationFrame(frame);
+        } else {
+            timelineRunning = false;
+            timelineAnimationFrame = null;
+        }
+    }
+
+    timelineAnimationFrame =
+        requestAnimationFrame(frame);
+}
+
+function pauseTimelineMovement() {
+
+    if (!timelineRunning) {
+        return;
+    }
+
+    timelineRunning = false;
+
+    if (timelineAnimationFrame) {
+        cancelAnimationFrame(timelineAnimationFrame);
+        timelineAnimationFrame = null;
+    }
+}
+
+function resetTimelineMovement() {
+
+    pauseTimelineMovement();
+
+    timelineElapsedMs = 0;
+
+    setTimelineBeatPosition(0);
+}
+
+function seekTimelineToBeat(beat) {
+
+    pauseTimelineMovement();
+
+    const quarterNoteMs = 500;
+    const speed = getTimelineSpeed();
+
+    timelineElapsedMs =
+        beat * (quarterNoteMs / speed);
+
+    setTimelineBeatPosition(beat);
+}
+
+window.startTimelineMovement = startTimelineMovement;
+window.pauseTimelineMovement = pauseTimelineMovement;
+window.resetTimelineMovement = resetTimelineMovement;
+window.seekTimelineToBeat = seekTimelineToBeat;
+
+
+
+</script>
+<script src="/static/js/fingering.js?v=3"></script>
+<script src="/static/js/player.js"></script>
 </body>
 </html>

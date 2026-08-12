@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 900" role="img" aria-label="Interactive alto saxophone fingering">
+<defs>
+<linearGradient id="bodyGradient" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#b87919"/><stop offset="35%" stop-color="#f5c64d"/>
+<stop offset="65%" stop-color="#d99b25"/><stop offset="100%" stop-color="#8d5a10"/>
+</linearGradient>
+<radialGradient id="keyGradient">
+<stop offset="0%" stop-color="#f5f7fa"/><stop offset="70%" stop-color="#bfc5cd"/><stop offset="100%" stop-color="#707782"/>
+</radialGradient>
+<filter id="keyGlow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<path d="M207 145 C205 112 182 94 151 87 C126 81 111 68 112 51 C113 35 126 26 142 29 C162 32 174 47 171 63 C168 80 153 88 137 84" fill="none" stroke="#e6ad32" stroke-width="20" stroke-linecap="round"/>
+<path d="M110 50 L58 29 L49 43 L106 64 Z" fill="#16191e"/>
+<path d="M205 155 C205 115 175 95 135 88 C105 83 78 65 80 42 C82 20 105 8 128 16 C155 25 171 47 166 70 C161 92 140 103 121 100 C145 112 180 120 206 128 L226 132 L226 710 C226 760 258 792 302 812 C328 824 343 846 334 867 C324 892 286 898 258 881 C226 862 205 833 205 797 L205 155 Z" fill="url(#bodyGradient)" stroke="#8a5a12" stroke-width="6"/>
+<rect x="198" y="150" width="35" height="570" rx="16" fill="#c58a20"/>
+<rect x="204" y="160" width="10" height="540" rx="5" fill="#f4c44c" opacity="0.7"/>
+<path d="M225 680 C225 750 260 782 310 800 C350 814 374 843 363 870 C351 900 304 909 265 887 C223 864 204 828 204 780 Z" fill="url(#bodyGradient)" stroke="#8a5a12" stroke-width="6"/>
+<ellipse cx="316" cy="863" rx="48" ry="24" fill="#8b5a12"/><ellipse cx="316" cy="858" rx="38" ry="16" fill="#29231a"/>
+<g fill="none" stroke="#8c6217" stroke-width="5">
+<line x1="155" y1="270" x2="205" y2="270"/><line x1="155" y1="325" x2="205" y2="325"/><line x1="155" y1="380" x2="205" y2="380"/>
+<line x1="155" y1="475" x2="205" y2="475"/><line x1="155" y1="530" x2="205" y2="530"/><line x1="155" y1="585" x2="205" y2="585"/>
+</g>
+<g id="left-hand">
+<circle id="left-key-1" class="sax-key" cx="177" cy="270" r="23"/>
+<circle id="left-key-2" class="sax-key" cx="177" cy="325" r="23"/>
+<circle id="left-key-3" class="sax-key" cx="177" cy="380" r="23"/>
+</g>
+<g id="right-hand">
+<circle id="right-key-1" class="sax-key" cx="177" cy="475" r="23"/>
+<circle id="right-key-2" class="sax-key" cx="177" cy="530" r="23"/>
+<circle id="right-key-3" class="sax-key" cx="177" cy="585" r="23"/>
+</g>
+<circle id="octave-key" class="sax-key" cx="250" cy="215" r="18"/>
+<circle id="side-key-1" class="sax-key" cx="250" cy="370" r="17"/>
+<circle id="side-key-2" class="sax-key" cx="250" cy="420" r="17"/>
+<circle id="palm-key-1" class="sax-key" cx="250" cy="275" r="15"/>
+<circle id="palm-key-2" class="sax-key" cx="250" cy="315" r="15"/>
+<style>
+.sax-key{fill:url(#keyGradient);stroke:#8b929d;stroke-width:3;transition:fill .2s ease,filter .2s ease,transform .2s ease;transform-box:fill-box;transform-origin:center}
+.sax-key.active{fill:#4f7cff;stroke:#8db0ff;filter:url(#keyGlow)}
+</style>
+</svg>

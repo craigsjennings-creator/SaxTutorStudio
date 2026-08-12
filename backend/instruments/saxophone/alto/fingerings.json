@@ -1,0 +1,130 @@
+{
+    "C4": {
+        "left_hand": {
+            "index": true,
+            "middle": true,
+            "ring": true
+        },
+        "right_hand": {
+            "index": true,
+            "middle": true,
+            "ring": true
+        },
+        "palm": {
+            "front_f": false,
+            "front_ef": false
+        }
+    },
+    "D4": {
+        "left_hand": {
+            "index": true,
+            "middle": true,
+            "ring": true
+        },
+        "right_hand": {
+            "index": true,
+            "middle": true,
+            "ring": false
+        },
+        "palm": {
+            "front_f": false,
+            "front_ef": false
+        }
+    },
+    "E4": {
+        "left_hand": {
+            "index": true,
+            "middle": true,
+            "ring": false
+        },
+        "right_hand": {
+            "index": false,
+            "middle": false,
+            "ring": false
+        },
+        "palm": {
+            "front_f": false,
+            "front_ef": false
+        }
+    },
+    "F4": {
+        "left_hand": {
+            "index": true,
+            "middle": false,
+            "ring": false
+        },
+        "right_hand": {
+            "index": false,
+            "middle": false,
+            "ring": false
+        },
+        "palm": {
+            "front_f": false,
+            "front_ef": false
+        }
+    },
+    "G4": {
+        "left_hand": {
+            "index": false,
+            "middle": false,
+            "ring": false
+        },
+        "right_hand": {
+            "index": false,
+            "middle": false,
+            "ring": false
+        },
+        "palm": {
+            "front_f": false,
+            "front_ef": false
+        }
+    },
+    "A4": {
+        "left_hand": {
+            "index": true,
+            "middle": false,
+            "ring": false
+        },
+        "right_hand": {
+            "index": false,
+            "middle": false,
+            "ring": false
+        },
+        "palm": {
+            "front_f": false,
+            "front_ef": false
+        }
+    },
+    "B4": {
+        "left_hand": {
+            "index": true,
+            "middle": true,
+            "ring": false
+        },
+        "right_hand": {
+            "index": false,
+            "middle": false,
+            "ring": false
+        },
+        "palm": {
+            "front_f": false,
+            "front_ef": false
+        }
+    },
+    "C5": {
+        "left_hand": {
+            "index": true,
+            "middle": true,
+            "ring": true
+        },
+        "right_hand": {
+            "index": false,
+            "middle": false,
+            "ring": false
+        },
+        "palm": {
+            "front_f": false,
+            "front_ef": false
+        }
+    }
+}
