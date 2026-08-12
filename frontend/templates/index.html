@@ -354,9 +354,11 @@
     position: absolute;
     top: 35px;
     transform: translateX(calc(-50% + var(--timeline-shift, 0px)));
-    font-size: 42px;
+    font-size: 34px;
     font-weight: bold;
     color: white;
+    white-space: nowrap;
+    will-change: transform;
 }
 
 /* Finger lanes */
@@ -370,6 +372,10 @@
     position: relative;
     height: 55px;
     border-bottom: 1px solid #242b37;
+}
+
+.finger-lane.group-start {
+    border-top: 8px solid #111722;
 }
 
 .finger-number {
@@ -695,33 +701,43 @@ function buildTutorialTimeline(notes) {
     }
 
     /*
-     * Octave stays at the top so the lane order
-     * follows the physical layout of the saxophone.
+     * Lane definitions are ordered to resemble the
+     * physical layout of the saxophone.
+     *
+     * Main left/right stack is always shown.
+     * Octave, palm and auxiliary keys only appear
+     * when the uploaded music actually uses them.
      */
-    const mainLanes = [
-        { key: "octave", label: "Oct" },
-        { key: "left_1", label: "L1" },
-        { key: "left_2", label: "L2" },
-        { key: "left_3", label: "L3" },
-        { key: "right_1", label: "R1" },
-        { key: "right_2", label: "R2" },
-        { key: "right_3", label: "R3" }
+    const laneDefinitions = [
+        { key: "octave", label: "Oct", always: false },
+
+        { key: "palm_d", label: "Palm D", always: false },
+        { key: "palm_eb", label: "Palm Eb", always: false },
+        { key: "palm_f", label: "Palm F", always: false },
+        { key: "high_f_sharp", label: "High F#", always: false },
+
+        { key: "left_1", label: "L1", always: true },
+        { key: "bis_bb", label: "Bis Bb", always: false },
+        { key: "left_2", label: "L2", always: true },
+        { key: "left_3", label: "L3", always: true },
+        { key: "g_sharp", label: "G#", always: false },
+
+        { key: "right_1", label: "R1", always: true },
+        { key: "right_2", label: "R2", always: true },
+        { key: "right_3", label: "R3", always: true },
+
+        { key: "side_bb", label: "Side Bb", always: false },
+        { key: "side_c", label: "Side C", always: false },
+        { key: "side_e", label: "Side E", always: false },
+        { key: "eb_key", label: "Eb", always: false },
+
+        { key: "low_c", label: "Low C", always: false },
+        { key: "low_c_sharp", label: "Low C#", always: false },
+        { key: "low_b", label: "Low B", always: false },
+        { key: "low_bb", label: "Low Bb", always: false }
     ];
 
-    const extraKeyLabels = {
-        "low_c": "Low C",
-        "low_c_sharp": "Low C#",
-        "low_b": "Low B",
-        "low_bb": "Low Bb",
-        "side_bb": "Side Bb",
-        "side_c": "Side C",
-        "side_e": "Side E",
-        "palm_d": "Palm D",
-        "palm_eb": "Palm Eb",
-        "palm_f": "Palm F"
-    };
-
-    const usedExtraKeys = new Set();
+    const usedKeys = new Set();
 
     validNotes.forEach(noteData => {
 
@@ -732,28 +748,69 @@ function buildTutorialTimeline(notes) {
             return;
         }
 
-        fingering.keys.forEach(key => {
-
-            if (!mainLanes.some(lane => lane.key === key)) {
-                usedExtraKeys.add(key);
-            }
-
-        });
+        fingering.keys.forEach(key =>
+            usedKeys.add(key)
+        );
 
     });
 
-    const lanes = [
-        ...mainLanes,
-        ...Array.from(usedExtraKeys).map(key => ({
-            key,
-            label: extraKeyLabels[key] || key
-        }))
-    ];
+    const lanes = laneDefinitions.filter(
+        lane =>
+            lane.always ||
+            usedKeys.has(lane.key)
+    );
 
-    lanes.forEach(laneData => {
+    const groupForKey = key => {
+
+        if (
+            key === "octave" ||
+            key.startsWith("palm_") ||
+            key === "high_f_sharp"
+        ) {
+            return "upper";
+        }
+
+        if (
+            key.startsWith("left_") ||
+            key === "bis_bb" ||
+            key === "g_sharp"
+        ) {
+            return "left";
+        }
+
+        if (key.startsWith("right_")) {
+            return "right";
+        }
+
+        if (
+            key.startsWith("side_") ||
+            key === "eb_key"
+        ) {
+            return "side";
+        }
+
+        return "low";
+    };
+
+    lanes.forEach((laneData, laneIndex) => {
 
         const lane = document.createElement("div");
         lane.className = "finger-lane";
+
+        const currentGroup =
+            groupForKey(laneData.key);
+
+        const previousGroup =
+            laneIndex > 0
+                ? groupForKey(lanes[laneIndex - 1].key)
+                : currentGroup;
+
+        if (
+            laneIndex > 0 &&
+            currentGroup !== previousGroup
+        ) {
+            lane.classList.add("group-start");
+        }
         lane.dataset.key = laneData.key;
 
         const label = document.createElement("span");
@@ -765,11 +822,6 @@ function buildTutorialTimeline(notes) {
 
     });
 
-    const totalDuration = Math.max(
-        ...notes.map(note =>
-            note.offset + note.duration
-        )
-    );
 
     /*
      * Note labels across the top.
@@ -781,9 +833,9 @@ function buildTutorialTimeline(notes) {
         note.textContent = noteData.pitch;
 
         const left =
-            (noteData.offset / totalDuration) * 100;
+            noteData.offset * TIMELINE_PIXELS_PER_BEAT;
 
-        note.style.left = `${left}%`;
+        note.style.left = `${left}px`;
 
         notesContainer.appendChild(note);
 
@@ -801,11 +853,14 @@ function buildTutorialTimeline(notes) {
             return;
         }
 
-        const startPercent =
-            (noteData.offset / totalDuration) * 100;
+        const startPixels =
+            noteData.offset * TIMELINE_PIXELS_PER_BEAT;
 
-        const widthPercent =
-            (noteData.duration / totalDuration) * 100;
+        const widthPixels =
+            Math.max(
+                8,
+                noteData.duration * TIMELINE_PIXELS_PER_BEAT
+            );
 
         fingering.keys.forEach(key => {
 
@@ -821,8 +876,8 @@ function buildTutorialTimeline(notes) {
             const bar = document.createElement("div");
             bar.className = "finger-bar active";
 
-            bar.style.left = `${startPercent}%`;
-            bar.style.width = `${widthPercent}%`;
+            bar.style.left = `${startPixels}px`;
+            bar.style.width = `${widthPixels}px`;
 
             bar.title = `${noteData.pitch} — ${key}`;
 
@@ -834,6 +889,17 @@ function buildTutorialTimeline(notes) {
 
     prepareTimelineMovement(notes);
 }
+
+
+/*
+ * Fixed visual scale.
+ *
+ * Every quarter-note beat gets the same amount of horizontal
+ * space regardless of song length. Longer songs therefore
+ * extend beyond the visible window and scroll underneath the
+ * fixed playhead.
+ */
+const TIMELINE_PIXELS_PER_BEAT = 150;
 
 
 /* =========================================================
@@ -878,28 +944,17 @@ function setTimelineBeatPosition(beat) {
         return;
     }
 
-    const totalBeats = getTimelineTotalBeats();
-
-    if (!totalBeats) {
-        return;
-    }
-
     const width = timeline.clientWidth;
 
     /*
-     * The playhead is fixed at 30% of the timeline.
-     * At beat zero, the first note sits on that line.
+     * Keep the white playhead fixed at 30% of the viewport.
+     * Beat zero starts underneath it.
      */
     const playheadX = width * 0.30;
 
-    const progress =
-        Math.max(
-            0,
-            Math.min(1, beat / totalBeats)
-        );
-
     const shift =
-        playheadX - (progress * width);
+        playheadX -
+        (beat * TIMELINE_PIXELS_PER_BEAT);
 
     timeline.style.setProperty(
         "--timeline-shift",
@@ -1021,7 +1076,7 @@ window.seekTimelineToBeat = seekTimelineToBeat;
 
 
 </script>
-<script src="/static/js/fingering.js?v=3"></script>
-<script src="/static/js/player.js"></script>
+<script src="/static/js/fingering.js?v=5"></script>
+<script src="/static/js/player.js?v=5"></script>
 </body>
 </html>
