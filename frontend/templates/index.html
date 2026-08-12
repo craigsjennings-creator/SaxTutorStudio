@@ -856,10 +856,13 @@ function buildTutorialTimeline(notes) {
         const startPixels =
             noteData.offset * TIMELINE_PIXELS_PER_BEAT;
 
+        const visualGapPixels = 4;
+
         const widthPixels =
             Math.max(
                 8,
-                noteData.duration * TIMELINE_PIXELS_PER_BEAT
+                (noteData.duration * TIMELINE_PIXELS_PER_BEAT) -
+                visualGapPixels
             );
 
         fingering.keys.forEach(key => {
