@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .vscode/
 output/
+frontend/templates/index2.html
+frontend/templates/index_old.html
