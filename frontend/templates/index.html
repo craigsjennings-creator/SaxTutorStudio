@@ -445,7 +445,14 @@
     background: #111722;
     border-radius: 16px;
     overflow: hidden;
+    cursor: grab;
+    user-select: none;
 }
+
+.tutorial-timeline.dragging {
+    cursor: grabbing;
+}
+
 
 /* Notes across the top */
 
@@ -464,6 +471,36 @@
     color: white;
     white-space: nowrap;
     will-change: transform;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition:
+        background 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.timeline-note:hover {
+    background: rgba(79, 124, 255, 0.16);
+}
+
+.timeline-note,
+.finger-bar {
+    cursor: pointer;
+}
+
+.tutorial-timeline.dragging .timeline-note,
+.tutorial-timeline.dragging .finger-bar {
+    cursor: grabbing;
+}
+
+.timeline-note.loop-start,
+.timeline-note.loop-end {
+    background: rgba(79, 124, 255, 0.24);
+    box-shadow: 0 0 0 2px rgba(79, 124, 255, 0.55);
+}
+
+.timeline-note.loop-selected {
+    background: rgba(79, 124, 255, 0.10);
 }
 
 /* Finger lanes */
@@ -529,6 +566,36 @@
 .finger-bar.auxiliary {
     height: 20px;
     top: 17px;
+}
+
+.finger-bar.loop-selected {
+    box-shadow:
+        0 0 0 2px rgba(141, 176, 255, 0.7),
+        0 0 14px rgba(79, 124, 255, 0.45);
+}
+
+.finger-bar.loop-start,
+.finger-bar.loop-end {
+    box-shadow:
+        0 0 0 3px rgba(255, 255, 255, 0.8),
+        0 0 16px rgba(79, 124, 255, 0.6);
+}
+
+.timeline-note.loop-preview,
+.finger-bar.loop-preview {
+    background: rgba(79, 124, 255, 0.22);
+    box-shadow:
+        0 0 0 2px rgba(141, 176, 255, 0.55),
+        0 0 14px rgba(79, 124, 255, 0.38);
+}
+
+.tutorial-timeline.loop-drawing {
+    cursor: crosshair;
+}
+
+.tutorial-timeline.loop-drawing .timeline-note,
+.tutorial-timeline.loop-drawing .finger-bar {
+    cursor: crosshair;
 }
 
 /* Count-in */
@@ -757,6 +824,18 @@
             id="loop-end"
             disabled
         ></select>
+    </div>
+
+    <div
+        id="loop-selection-help"
+        style="
+            margin-top: 12px;
+            font-size: 13px;
+            color: #8f98a8;
+        "
+    >
+        Tick loop mode, then click a note to set the start and another note to set the end.
+        With Loop enabled, press on a note or blue bar and drag across the notes you want to practise. Hold near the left or right edge and the timeline will auto-scroll. Release to create the loop. Drag empty timeline space to browse.
     </div>
 </div>
 
@@ -1054,14 +1133,34 @@ function buildTutorialTimeline(notes) {
      */
     validNotes.forEach(noteData => {
 
+        const originalIndex =
+            notes.indexOf(noteData);
+
         const note = document.createElement("div");
-        note.className = "timeline-note";
+        note.className = "timeline-note loop-selectable";
         note.textContent = noteData.pitch;
+
+        note.dataset.noteIndex =
+            String(originalIndex);
 
         const left =
             noteData.offset * TIMELINE_PIXELS_PER_BEAT;
 
         note.style.left = `${left}px`;
+
+        note.addEventListener(
+            "click",
+            () => {
+
+                if (
+                    window.handleTimelineLoopClick
+                ) {
+                    window.handleTimelineLoopClick(
+                        originalIndex
+                    );
+                }
+            }
+        );
 
         notesContainer.appendChild(note);
 
@@ -1103,7 +1202,27 @@ function buildTutorialTimeline(notes) {
             }
 
             const bar = document.createElement("div");
-            bar.className = "finger-bar active";
+            bar.className = "finger-bar active loop-selectable";
+
+            const originalIndex =
+                notes.indexOf(noteData);
+
+            bar.dataset.noteIndex =
+                String(originalIndex);
+
+            bar.addEventListener(
+                "click",
+                () => {
+
+                    if (
+                        window.handleTimelineLoopClick
+                    ) {
+                        window.handleTimelineLoopClick(
+                            originalIndex
+                        );
+                    }
+                }
+            );
 
             const mainFingerKeys = [
                 "left_1",
@@ -1320,6 +1439,6 @@ window.setTimelineBeatPosition = setTimelineBeatPosition;
 
 </script>
 <script src="/static/js/fingering.js?v=5"></script>
-<script src="/static/js/player.js?v=8"></script>
+<script src="/static/js/player.js?v=13"></script>
 </body>
 </html>

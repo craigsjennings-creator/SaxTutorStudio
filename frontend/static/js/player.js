@@ -33,6 +33,28 @@ let animationFrame = null;
 let scheduledSources = [];
 
 let loopHasCountedIn = false;
+let timelineLoopClickStage = "start";
+
+let timelineDragActive = false;
+let timelineDragMoved = false;
+let timelineDragStartX = 0;
+let timelineDragStartBeat = 0;
+
+let loopDrawActive = false;
+let loopDrawStartIndex = null;
+let loopDrawCurrentIndex = null;
+let loopDrawPointerId = null;
+
+let loopDrawPointerX = 0;
+let loopDrawPointerY = 0;
+let loopAutoScrollDirection = 0;
+let loopAutoScrollFrame = null;
+let loopAutoScrollLastTime = 0;
+
+const LOOP_EDGE_SCROLL_ZONE = 80;
+const LOOP_AUTO_SCROLL_BEATS_PER_SECOND = 3.0;
+
+const TIMELINE_DRAG_THRESHOLD = 6;
 
 const BASE_BPM = 120;
 const COUNT_IN_BEATS = 4;
@@ -932,6 +954,8 @@ function populateLoopSelectors() {
                 ].index
             );
     }
+
+    refreshTimelineLoopHighlight();
 }
 
 
@@ -1005,6 +1029,190 @@ function getLoopBounds() {
             (endNote?.offset ?? 0) +
             (endNote?.duration ?? 0)
     };
+}
+
+
+function refreshTimelineLoopHighlight() {
+
+    const selectableItems =
+        document.querySelectorAll(
+            ".timeline-note[data-note-index], " +
+            ".finger-bar[data-note-index]"
+        );
+
+    selectableItems.forEach(item => {
+
+        item.classList.remove(
+            "loop-start",
+            "loop-end",
+            "loop-selected"
+        );
+    });
+
+    if (!isLoopEnabled()) {
+        return;
+    }
+
+    const bounds =
+        getLoopBounds();
+
+    selectableItems.forEach(item => {
+
+        const index =
+            parseInt(
+                item.dataset.noteIndex ?? "-1",
+                10
+            );
+
+        if (
+            index >= bounds.startIndex &&
+            index <= bounds.endIndex
+        ) {
+            item.classList.add(
+                "loop-selected"
+            );
+        }
+
+        if (index === bounds.startIndex) {
+            item.classList.add(
+                "loop-start"
+            );
+        }
+
+        if (index === bounds.endIndex) {
+            item.classList.add(
+                "loop-end"
+            );
+        }
+    });
+}
+
+
+function setLoopRange(
+    startIndex,
+    endIndex
+) {
+
+    const startSelect =
+        document.getElementById(
+            "loop-start"
+        );
+
+    const endSelect =
+        document.getElementById(
+            "loop-end"
+        );
+
+    if (!startSelect || !endSelect) {
+        return;
+    }
+
+    if (endIndex < startIndex) {
+        [startIndex, endIndex] =
+            [endIndex, startIndex];
+    }
+
+    startSelect.value =
+        String(startIndex);
+
+    endSelect.value =
+        String(endIndex);
+
+    loopHasCountedIn = false;
+
+    const bounds =
+        getLoopBounds();
+
+    pausedMusicalBeats =
+        bounds.startBeat;
+
+    highlightEvent(
+        bounds.startIndex
+    );
+
+    if (window.setTimelineBeatPosition) {
+        window.setTimelineBeatPosition(
+            bounds.startBeat
+        );
+    }
+
+    refreshTimelineLoopHighlight();
+}
+
+
+function handleTimelineLoopClick(
+    noteIndex
+) {
+
+    if (shouldSuppressTimelineClick()) {
+        return;
+    }
+
+    if (!isLoopEnabled()) {
+        return;
+    }
+
+    /*
+     * A simple tap/click still supports the existing
+     * start-then-end selection workflow.
+     */
+
+    const playableIndexes =
+        getPlayableNoteIndexes()
+            .map(item => item.index);
+
+    if (!playableIndexes.includes(noteIndex)) {
+        return;
+    }
+
+    const startSelect =
+        document.getElementById(
+            "loop-start"
+        );
+
+    const endSelect =
+        document.getElementById(
+            "loop-end"
+        );
+
+    if (!startSelect || !endSelect) {
+        return;
+    }
+
+    if (timelineLoopClickStage === "start") {
+
+        startSelect.value =
+            String(noteIndex);
+
+        endSelect.value =
+            String(noteIndex);
+
+        timelineLoopClickStage =
+            "end";
+
+    } else {
+
+        const startIndex =
+            parseInt(
+                startSelect.value,
+                10
+            );
+
+        setLoopRange(
+            startIndex,
+            noteIndex
+        );
+
+        timelineLoopClickStage =
+            "start";
+
+        return;
+    }
+
+    setLoopRange(
+        noteIndex,
+        noteIndex
+    );
 }
 
 
@@ -1573,6 +1781,7 @@ function loadTutorialPlayer(notes) {
     highlightEvent(0);
 
     loopHasCountedIn = false;
+    timelineLoopClickStage = "start";
     populateLoopSelectors();
 
     /*
@@ -1582,6 +1791,805 @@ function loadTutorialPlayer(notes) {
     if (audioContext) {
         preloadAltoSamples();
     }
+}
+
+
+/* =========================================================
+   Drag-to-draw loop selection
+   ========================================================= */
+
+function getSelectableNoteIndexFromPoint(
+    clientX,
+    clientY
+) {
+
+    const element =
+        document.elementFromPoint(
+            clientX,
+            clientY
+        );
+
+    const selectable =
+        element?.closest(
+            ".loop-selectable[data-note-index]"
+        );
+
+    if (!selectable) {
+        return null;
+    }
+
+    const index =
+        parseInt(
+            selectable.dataset.noteIndex ?? "",
+            10
+        );
+
+    return Number.isFinite(index)
+        ? index
+        : null;
+}
+
+
+function nearestPlayableIndex(index) {
+
+    const playable =
+        getPlayableNoteIndexes()
+            .map(item => item.index);
+
+    if (!playable.length) {
+        return null;
+    }
+
+    if (playable.includes(index)) {
+        return index;
+    }
+
+    let nearest =
+        playable[0];
+
+    let distance =
+        Math.abs(
+            nearest - index
+        );
+
+    playable.forEach(candidate => {
+
+        const candidateDistance =
+            Math.abs(
+                candidate - index
+            );
+
+        if (candidateDistance < distance) {
+            nearest = candidate;
+            distance = candidateDistance;
+        }
+    });
+
+    return nearest;
+}
+
+
+function previewLoopRange(
+    startIndex,
+    endIndex
+) {
+
+    document
+        .querySelectorAll(
+            ".loop-selectable[data-note-index]"
+        )
+        .forEach(item => {
+
+            item.classList.remove(
+                "loop-preview"
+            );
+        });
+
+    if (
+        startIndex === null ||
+        endIndex === null
+    ) {
+        return;
+    }
+
+    const minIndex =
+        Math.min(
+            startIndex,
+            endIndex
+        );
+
+    const maxIndex =
+        Math.max(
+            startIndex,
+            endIndex
+        );
+
+    document
+        .querySelectorAll(
+            ".loop-selectable[data-note-index]"
+        )
+        .forEach(item => {
+
+            const index =
+                parseInt(
+                    item.dataset.noteIndex ?? "-1",
+                    10
+                );
+
+            if (
+                index >= minIndex &&
+                index <= maxIndex
+            ) {
+                item.classList.add(
+                    "loop-preview"
+                );
+            }
+        });
+}
+
+
+function clearLoopPreview() {
+
+    document
+        .querySelectorAll(
+            ".loop-preview"
+        )
+        .forEach(item =>
+            item.classList.remove(
+                "loop-preview"
+            )
+        );
+}
+
+
+function getNearestTimelineNoteIndexByX(
+    clientX
+) {
+
+    const notes =
+        Array.from(
+            document.querySelectorAll(
+                ".timeline-note[data-note-index]"
+            )
+        );
+
+    if (!notes.length) {
+        return null;
+    }
+
+    let nearestIndex = null;
+    let nearestDistance = Infinity;
+
+    notes.forEach(note => {
+
+        const rect =
+            note.getBoundingClientRect();
+
+        const centreX =
+            rect.left +
+            (rect.width / 2);
+
+        const distance =
+            Math.abs(
+                centreX - clientX
+            );
+
+        if (distance < nearestDistance) {
+
+            const index =
+                parseInt(
+                    note.dataset.noteIndex ?? "",
+                    10
+                );
+
+            if (Number.isFinite(index)) {
+                nearestDistance = distance;
+                nearestIndex = index;
+            }
+        }
+    });
+
+    return nearestIndex;
+}
+
+
+function updateLoopDrawSelectionAtPointer() {
+
+    if (!loopDrawActive) {
+        return;
+    }
+
+    let hitIndex =
+        getSelectableNoteIndexFromPoint(
+            loopDrawPointerX,
+            loopDrawPointerY
+        );
+
+    /*
+     * During edge auto-scroll the pointer may sit over empty
+     * space between notes. In that case choose the note whose
+     * label is horizontally closest to the pointer.
+     */
+    if (hitIndex === null) {
+        hitIndex =
+            getNearestTimelineNoteIndexByX(
+                loopDrawPointerX
+            );
+    }
+
+    if (hitIndex === null) {
+        return;
+    }
+
+    const playableIndex =
+        nearestPlayableIndex(
+            hitIndex
+        );
+
+    if (playableIndex === null) {
+        return;
+    }
+
+    if (
+        playableIndex !==
+        loopDrawCurrentIndex
+    ) {
+
+        loopDrawCurrentIndex =
+            playableIndex;
+
+        previewLoopRange(
+            loopDrawStartIndex,
+            loopDrawCurrentIndex
+        );
+    }
+}
+
+
+function stopLoopAutoScroll() {
+
+    loopAutoScrollDirection = 0;
+
+    if (loopAutoScrollFrame) {
+        cancelAnimationFrame(
+            loopAutoScrollFrame
+        );
+        loopAutoScrollFrame = null;
+    }
+
+    loopAutoScrollLastTime = 0;
+}
+
+
+function runLoopAutoScroll(now) {
+
+    if (
+        !loopDrawActive ||
+        loopAutoScrollDirection === 0
+    ) {
+        stopLoopAutoScroll();
+        return;
+    }
+
+    if (!loopAutoScrollLastTime) {
+        loopAutoScrollLastTime = now;
+    }
+
+    const deltaSeconds =
+        Math.min(
+            0.05,
+            (now - loopAutoScrollLastTime) /
+            1000
+        );
+
+    loopAutoScrollLastTime = now;
+
+    pausedMusicalBeats =
+        clampBeat(
+            pausedMusicalBeats +
+            (
+                loopAutoScrollDirection *
+                LOOP_AUTO_SCROLL_BEATS_PER_SECOND *
+                deltaSeconds
+            )
+        );
+
+    if (window.setTimelineBeatPosition) {
+        window.setTimelineBeatPosition(
+            pausedMusicalBeats
+        );
+    }
+
+    /*
+     * As the timeline moves under the stationary pointer,
+     * extend the loop selection to the newly revealed notes.
+     */
+    updateLoopDrawSelectionAtPointer();
+
+    const atStart =
+        pausedMusicalBeats <= 0;
+
+    const atEnd =
+        pausedMusicalBeats >=
+        getTotalBeats();
+
+    if (
+        (atStart &&
+         loopAutoScrollDirection < 0) ||
+        (atEnd &&
+         loopAutoScrollDirection > 0)
+    ) {
+        stopLoopAutoScroll();
+        return;
+    }
+
+    loopAutoScrollFrame =
+        requestAnimationFrame(
+            runLoopAutoScroll
+        );
+}
+
+
+function updateLoopAutoScrollDirection() {
+
+    if (!loopDrawActive) {
+        stopLoopAutoScroll();
+        return;
+    }
+
+    const timeline =
+        document.querySelector(
+            ".tutorial-timeline"
+        );
+
+    if (!timeline) {
+        stopLoopAutoScroll();
+        return;
+    }
+
+    const rect =
+        timeline.getBoundingClientRect();
+
+    let direction = 0;
+
+    if (
+        loopDrawPointerX <=
+        rect.left +
+        LOOP_EDGE_SCROLL_ZONE
+    ) {
+        direction = -1;
+
+    } else if (
+        loopDrawPointerX >=
+        rect.right -
+        LOOP_EDGE_SCROLL_ZONE
+    ) {
+        direction = 1;
+    }
+
+    if (
+        direction ===
+        loopAutoScrollDirection
+    ) {
+        return;
+    }
+
+    stopLoopAutoScroll();
+
+    loopAutoScrollDirection =
+        direction;
+
+    if (direction !== 0) {
+        loopAutoScrollFrame =
+            requestAnimationFrame(
+                runLoopAutoScroll
+            );
+    }
+}
+
+
+function beginLoopDraw(
+    event,
+    noteIndex
+) {
+
+    if (!isLoopEnabled()) {
+        return false;
+    }
+
+    const playableIndex =
+        nearestPlayableIndex(
+            noteIndex
+        );
+
+    if (playableIndex === null) {
+        return false;
+    }
+
+    if (isPlaying) {
+        pausePlayback();
+    }
+
+    loopDrawActive = true;
+
+    loopDrawStartIndex =
+        playableIndex;
+
+    loopDrawCurrentIndex =
+        playableIndex;
+
+    loopDrawPointerId =
+        event.pointerId;
+
+    loopDrawPointerX =
+        event.clientX;
+
+    loopDrawPointerY =
+        event.clientY;
+
+    timelineDragActive = false;
+    timelineDragMoved = false;
+
+    const timeline =
+        document.querySelector(
+            ".tutorial-timeline"
+        );
+
+    timeline?.classList.add(
+        "loop-drawing"
+    );
+
+    try {
+        timeline?.setPointerCapture?.(
+            event.pointerId
+        );
+    } catch (error) {
+        // Pointer capture is optional.
+    }
+
+    previewLoopRange(
+        loopDrawStartIndex,
+        loopDrawCurrentIndex
+    );
+
+    event.preventDefault();
+
+    return true;
+}
+
+
+function moveLoopDraw(event) {
+
+    if (!loopDrawActive) {
+        return;
+    }
+
+    loopDrawPointerX =
+        event.clientX;
+
+    loopDrawPointerY =
+        event.clientY;
+
+    updateLoopDrawSelectionAtPointer();
+
+    updateLoopAutoScrollDirection();
+
+    event.preventDefault();
+}
+
+function endLoopDraw(event) {
+
+    if (!loopDrawActive) {
+        return;
+    }
+
+    const timeline =
+        document.querySelector(
+            ".tutorial-timeline"
+        );
+
+    timeline?.classList.remove(
+        "loop-drawing"
+    );
+
+    try {
+        timeline?.releasePointerCapture?.(
+            loopDrawPointerId
+        );
+    } catch (error) {
+        // Ignore.
+    }
+
+    if (
+        loopDrawStartIndex !== null &&
+        loopDrawCurrentIndex !== null
+    ) {
+        setLoopRange(
+            loopDrawStartIndex,
+            loopDrawCurrentIndex
+        );
+    }
+
+    clearLoopPreview();
+
+    stopLoopAutoScroll();
+
+    loopDrawActive = false;
+    loopDrawStartIndex = null;
+    loopDrawCurrentIndex = null;
+    loopDrawPointerId = null;
+    loopDrawPointerX = 0;
+    loopDrawPointerY = 0;
+
+    /*
+     * Prevent the click generated after pointerup from
+     * starting another loop selection.
+     */
+    timelineDragMoved = true;
+
+    setTimeout(
+        () => {
+            timelineDragMoved = false;
+        },
+        100
+    );
+
+    event.preventDefault();
+}
+
+
+/* =========================================================
+   Timeline drag / browse
+   ========================================================= */
+
+function pixelsPerBeat() {
+
+    /*
+     * Must match TIMELINE_PIXELS_PER_BEAT in index.html.
+     */
+    return 150;
+}
+
+
+function clampBeat(beat) {
+
+    return Math.max(
+        0,
+        Math.min(
+            getTotalBeats(),
+            beat
+        )
+    );
+}
+
+
+function beginTimelineDrag(event) {
+
+    const timeline =
+        event.target.closest(
+            ".tutorial-timeline"
+        );
+
+    if (!timeline) {
+        return;
+    }
+
+    /*
+     * Do not begin dragging from form controls.
+     */
+    if (
+        event.target.closest(
+            "button, select, input, label"
+        )
+    ) {
+        return;
+    }
+
+    /*
+     * Starting on a note/bar while Loop mode is enabled
+     * means "draw a loop range", not pan the timeline.
+     */
+    const selectable =
+        event.target.closest(
+            ".loop-selectable[data-note-index]"
+        );
+
+    if (
+        selectable &&
+        isLoopEnabled()
+    ) {
+        const noteIndex =
+            parseInt(
+                selectable.dataset.noteIndex,
+                10
+            );
+
+        if (
+            Number.isFinite(noteIndex) &&
+            beginLoopDraw(
+                event,
+                noteIndex
+            )
+        ) {
+            return;
+        }
+    }
+
+    /*
+     * Otherwise the gesture is a normal timeline pan.
+     */
+    if (isPlaying) {
+        pausePlayback();
+    }
+
+    timelineDragActive = true;
+    timelineDragMoved = false;
+
+    timelineDragStartX =
+        event.clientX;
+
+    timelineDragStartBeat =
+        pausedMusicalBeats;
+}
+
+
+function moveTimelineDrag(event) {
+
+    if (loopDrawActive) {
+        moveLoopDraw(event);
+        return;
+    }
+
+    if (!timelineDragActive) {
+        return;
+    }
+
+    const deltaX =
+        event.clientX -
+        timelineDragStartX;
+
+    if (
+        !timelineDragMoved &&
+        Math.abs(deltaX) >=
+        TIMELINE_DRAG_THRESHOLD
+    ) {
+        timelineDragMoved = true;
+
+        const timeline =
+            document.querySelector(
+                ".tutorial-timeline"
+            );
+
+        timeline?.classList.add(
+            "dragging"
+        );
+
+        try {
+            timeline?.setPointerCapture?.(
+                event.pointerId
+            );
+        } catch (error) {
+            // Pointer capture is optional.
+        }
+    }
+
+    if (!timelineDragMoved) {
+        return;
+    }
+
+    event.preventDefault();
+
+    /*
+     * Dragging the content right means browsing earlier.
+     * Dragging left means browsing later.
+     */
+    const beatDelta =
+        -deltaX /
+        pixelsPerBeat();
+
+    pausedMusicalBeats =
+        clampBeat(
+            timelineDragStartBeat +
+            beatDelta
+        );
+
+    if (window.setTimelineBeatPosition) {
+        window.setTimelineBeatPosition(
+            pausedMusicalBeats
+        );
+    }
+
+    /*
+     * Keep note highlight roughly aligned with the
+     * current browse position.
+     */
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+
+    tutorialNotes.forEach(
+        (note, index) => {
+
+            const distance =
+                Math.abs(
+                    note.offset -
+                    pausedMusicalBeats
+                );
+
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestIndex = index;
+            }
+        }
+    );
+
+    highlightEvent(
+        closestIndex
+    );
+}
+
+
+function endTimelineDrag(event) {
+
+    if (loopDrawActive) {
+        endLoopDraw(event);
+        return;
+    }
+
+    if (!timelineDragActive) {
+        return;
+    }
+
+    const timeline =
+        event.target.closest(
+            ".tutorial-timeline"
+        ) ||
+        document.querySelector(
+            ".tutorial-timeline"
+        );
+
+    timelineDragActive = false;
+
+    timeline?.classList.remove(
+        "dragging"
+    );
+
+    try {
+        timeline?.releasePointerCapture?.(
+            event.pointerId
+        );
+    } catch (error) {
+        // Capture may already be released.
+    }
+
+    /*
+     * If the pointer actually moved, suppress the click
+     * that browsers normally fire after a drag.
+     */
+    if (timelineDragMoved) {
+
+        event.preventDefault();
+
+        /*
+         * Keep the suppression flag alive long enough for
+         * the synthetic click event that follows pointerup.
+         */
+        setTimeout(
+            () => {
+                timelineDragMoved = false;
+            },
+            80
+        );
+
+    } else {
+
+        timelineDragMoved = false;
+    }
+}
+
+
+function shouldSuppressTimelineClick() {
+
+    return timelineDragMoved;
 }
 
 
@@ -1694,6 +2702,31 @@ document.addEventListener(
                 }
             );
 
+        const timeline =
+            document.querySelector(
+                ".tutorial-timeline"
+            );
+
+        timeline?.addEventListener(
+            "pointerdown",
+            beginTimelineDrag
+        );
+
+        timeline?.addEventListener(
+            "pointermove",
+            moveTimelineDrag
+        );
+
+        timeline?.addEventListener(
+            "pointerup",
+            endTimelineDrag
+        );
+
+        timeline?.addEventListener(
+            "pointercancel",
+            endTimelineDrag
+        );
+
         wireAudioControls();
 
         const loopEnabled =
@@ -1729,10 +2762,25 @@ document.addEventListener(
                 }
 
                 loopHasCountedIn = false;
+                timelineLoopClickStage =
+                    "start";
+
+                stopLoopAutoScroll();
+
+                loopDrawActive = false;
+                loopDrawStartIndex = null;
+                loopDrawCurrentIndex = null;
+                loopDrawPointerId = null;
+                loopDrawPointerX = 0;
+                loopDrawPointerY = 0;
+
+                clearLoopPreview();
 
                 if (isPlaying) {
                     pausePlayback();
                 }
+
+                refreshTimelineLoopHighlight();
 
                 if (enabled) {
 
@@ -1754,6 +2802,8 @@ document.addEventListener(
                             bounds.startBeat
                         );
                     }
+
+                    refreshTimelineLoopHighlight();
                 }
             }
         );
@@ -1767,6 +2817,9 @@ document.addEventListener(
 
                         loopHasCountedIn =
                             false;
+
+                        timelineLoopClickStage =
+                            "start";
 
                         if (isPlaying) {
                             pausePlayback();
@@ -1792,6 +2845,8 @@ document.addEventListener(
                                     bounds.startBeat
                                 );
                             }
+
+                            refreshTimelineLoopHighlight();
                         }
                     }
                 );
@@ -1803,3 +2858,6 @@ document.addEventListener(
 
 window.loadTutorialPlayer =
     loadTutorialPlayer;
+
+window.handleTimelineLoopClick =
+    handleTimelineLoopClick;
