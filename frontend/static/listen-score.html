@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YourMusicTutorial - Listen & Score Lab</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #111318;
+            color: white;
+        }
+
+        .container {
+            width: min(900px, 92%);
+            margin: 0 auto;
+            padding: 50px 0;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 36px;
+        }
+
+        .subtitle {
+            color: #9da6b5;
+            margin-bottom: 28px;
+        }
+
+        .card {
+            background: #1b1e25;
+            border: 1px solid #30343d;
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 22px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 7px;
+            color: #aab2c0;
+            font-size: 14px;
+        }
+
+        select, button {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 9px;
+            border: 1px solid #444b57;
+            background: #20242b;
+            color: white;
+            font-size: 16px;
+        }
+
+        button {
+            margin-top: 20px;
+            background: #4f7cff;
+            border-color: #4f7cff;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #638cff;
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: wait;
+        }
+
+        .result {
+            display: none;
+        }
+
+        .score {
+            font-size: 72px;
+            font-weight: 800;
+            margin: 10px 0 18px;
+        }
+
+        .good { color: #73df9a; }
+        .warn { color: #ffd36d; }
+        .bad  { color: #ff7f87; }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .metric {
+            background: #15181e;
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .metric-name {
+            color: #8f98a8;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        .metric-value {
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .status {
+            margin-top: 15px;
+            color: #9da6b5;
+            min-height: 20px;
+        }
+
+        .note {
+            font-family: monospace;
+        }
+
+        @media (max-width: 650px) {
+            .grid, .metrics {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎷 Listen & Score Lab</h1>
+    <div class="subtitle">
+        Prototype pitch detection using the real Iowa Alto Sax samples.
+    </div>
+
+    <div class="card">
+        <div class="grid">
+            <div>
+                <label for="sample-note">Audio sample to analyse</label>
+                <select id="sample-note"></select>
+            </div>
+
+            <div>
+                <label for="expected-note">Expected note</label>
+                <select id="expected-note"></select>
+            </div>
+        </div>
+
+        <button id="analyse-button">
+            Analyse Sample
+        </button>
+
+        <div class="status" id="status">
+            Choose a sample and expected note, then analyse.
+        </div>
+    </div>
+
+    <div class="card result" id="result">
+        <div>Overall pitch score</div>
+        <div class="score" id="score">--</div>
+
+        <div class="metrics">
+            <div class="metric">
+                <div class="metric-name">Expected</div>
+                <div class="metric-value note" id="expected-result">--</div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-name">Detected</div>
+                <div class="metric-value note" id="detected-result">--</div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-name">Detected frequency</div>
+                <div class="metric-value" id="frequency-result">--</div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-name">Pitch error</div>
+                <div class="metric-value" id="cents-result">--</div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-name">Detector confidence</div>
+                <div class="metric-value" id="confidence-result">--</div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-name">Note result</div>
+                <div class="metric-value" id="match-result">--</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/listen_score.js?v=1"></script>
+</body>
+</html>

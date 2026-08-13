@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YourMusicTutorial - Multi-note Listen & Score</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #111318;
+            color: white;
+        }
+
+        .container {
+            width: min(1100px, 94%);
+            margin: 0 auto;
+            padding: 45px 0;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 36px;
+        }
+
+        .subtitle {
+            color: #9da6b5;
+            margin-bottom: 28px;
+        }
+
+        .card {
+            background: #1b1e25;
+            border: 1px solid #30343d;
+            border-radius: 16px;
+            padding: 26px;
+            margin-bottom: 22px;
+        }
+
+        .phrase-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .phrase-row {
+            display: grid;
+            grid-template-columns: 70px 120px 1fr;
+            gap: 12px;
+            align-items: center;
+            padding: 12px;
+            background: #15181e;
+            border-radius: 10px;
+        }
+
+        .phrase-row .num {
+            color: #8590a3;
+            font-weight: bold;
+        }
+
+        .expected {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        select, button {
+            width: 100%;
+            padding: 11px 13px;
+            border-radius: 8px;
+            border: 1px solid #444b57;
+            background: #20242b;
+            color: white;
+            font-size: 15px;
+        }
+
+        button {
+            margin-top: 18px;
+            background: #4f7cff;
+            border-color: #4f7cff;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #638cff;
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: wait;
+        }
+
+        .summary {
+            display: none;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+
+        .summary-box {
+            background: #15181e;
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        .summary-label {
+            color: #8f98a8;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .summary-value {
+            font-size: 34px;
+            font-weight: 800;
+        }
+
+        .good { color: #73df9a; }
+        .warn { color: #ffd36d; }
+        .bad  { color: #ff7f87; }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #30343d;
+            text-align: left;
+        }
+
+        .results-table th {
+            color: #99a3b4;
+            font-size: 13px;
+        }
+
+        .note-pill {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 7px;
+            background: #20242b;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .status {
+            margin-top: 14px;
+            min-height: 20px;
+            color: #9da6b5;
+        }
+
+        @media (max-width: 750px) {
+            .phrase-row {
+                grid-template-columns: 52px 90px 1fr;
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .results-table {
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎷 Multi-note Listen & Score</h1>
+    <div class="subtitle">
+        Phrase-scoring prototype using your Iowa Alto Sax samples. Change any “Played sample” to simulate mistakes.
+    </div>
+
+    <div class="card">
+        <h2>Test phrase</h2>
+        <div class="phrase-grid" id="phrase-grid"></div>
+
+        <button id="analyse-phrase">
+            Analyse Phrase
+        </button>
+
+        <div class="status" id="status">
+            The default performance is correct. Change one or more played samples to test mistakes.
+        </div>
+    </div>
+
+    <div class="card summary" id="summary">
+        <h2>Performance result</h2>
+
+        <div class="summary-grid">
+            <div class="summary-box">
+                <div class="summary-label">Note accuracy</div>
+                <div class="summary-value" id="note-accuracy">--</div>
+            </div>
+
+            <div class="summary-box">
+                <div class="summary-label">Average tuning</div>
+                <div class="summary-value" id="tuning-score">--</div>
+            </div>
+
+            <div class="summary-box">
+                <div class="summary-label">Overall</div>
+                <div class="summary-value" id="overall-score">--</div>
+            </div>
+        </div>
+
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Expected</th>
+                    <th>Detected</th>
+                    <th>Result</th>
+                    <th>Tuning</th>
+                    <th>Confidence</th>
+                </tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="/static/js/listen_score_phrase.js?v=1"></script>
+</body>
+</html>
