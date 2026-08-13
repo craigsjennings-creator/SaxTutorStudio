@@ -32,6 +32,8 @@ let pausedMusicalBeats = 0;
 let animationFrame = null;
 let scheduledSources = [];
 
+let loopHasCountedIn = false;
+
 const BASE_BPM = 120;
 const COUNT_IN_BEATS = 4;
 
@@ -787,14 +789,15 @@ function scheduleMetronomeClick(
 
 function scheduleMetronomeFromBeat(
     startBeat,
-    includeCountIn
+    includeCountIn,
+    endBeat = null
 ) {
 
     const secPerBeat =
         secondsPerBeat();
 
     const totalBeats =
-        getTotalBeats();
+        endBeat ?? getTotalBeats();
 
     if (includeCountIn) {
 
@@ -841,6 +844,203 @@ function scheduleMetronomeFromBeat(
         scheduleMetronomeClick(
             when,
             beat % 4 === 0
+        );
+    }
+}
+
+
+/* =========================================================
+   Practice loop
+   ========================================================= */
+
+function getPlayableNoteIndexes() {
+
+    return tutorialNotes
+        .map((note, index) => ({
+            note,
+            index
+        }))
+        .filter(item =>
+            item.note.type !== "rest" &&
+            item.note.pitch !== "REST"
+        );
+}
+
+
+function populateLoopSelectors() {
+
+    const startSelect =
+        document.getElementById("loop-start");
+
+    const endSelect =
+        document.getElementById("loop-end");
+
+    if (!startSelect || !endSelect) {
+        return;
+    }
+
+    startSelect.innerHTML = "";
+    endSelect.innerHTML = "";
+
+    const playable =
+        getPlayableNoteIndexes();
+
+    playable.forEach((item, position) => {
+
+        const label =
+            `${position + 1}. ${item.note.pitch}`;
+
+        const startOption =
+            document.createElement("option");
+
+        startOption.value =
+            String(item.index);
+
+        startOption.textContent =
+            label;
+
+        const endOption =
+            document.createElement("option");
+
+        endOption.value =
+            String(item.index);
+
+        endOption.textContent =
+            label;
+
+        startSelect.appendChild(
+            startOption
+        );
+
+        endSelect.appendChild(
+            endOption
+        );
+    });
+
+    if (playable.length) {
+
+        startSelect.value =
+            String(playable[0].index);
+
+        endSelect.value =
+            String(
+                playable[
+                    Math.min(
+                        playable.length - 1,
+                        3
+                    )
+                ].index
+            );
+    }
+}
+
+
+function isLoopEnabled() {
+
+    return (
+        document.getElementById(
+            "loop-enabled"
+        )?.checked ?? false
+    );
+}
+
+
+function getLoopBounds() {
+
+    if (!isLoopEnabled()) {
+        return {
+            startIndex: 0,
+            endIndex:
+                Math.max(
+                    0,
+                    tutorialNotes.length - 1
+                ),
+            startBeat: 0,
+            endBeat: getTotalBeats()
+        };
+    }
+
+    const startSelect =
+        document.getElementById(
+            "loop-start"
+        );
+
+    const endSelect =
+        document.getElementById(
+            "loop-end"
+        );
+
+    let startIndex =
+        parseInt(
+            startSelect?.value ?? "0",
+            10
+        );
+
+    let endIndex =
+        parseInt(
+            endSelect?.value ??
+            String(startIndex),
+            10
+        );
+
+    if (endIndex < startIndex) {
+
+        const temp = startIndex;
+        startIndex = endIndex;
+        endIndex = temp;
+    }
+
+    const startNote =
+        tutorialNotes[startIndex];
+
+    const endNote =
+        tutorialNotes[endIndex];
+
+    return {
+        startIndex,
+        endIndex,
+        startBeat:
+            startNote?.offset ?? 0,
+        endBeat:
+            (endNote?.offset ?? 0) +
+            (endNote?.duration ?? 0)
+    };
+}
+
+
+function restartLoopCycle() {
+
+    const bounds =
+        getLoopBounds();
+
+    stopScheduledAudio();
+
+    pausedMusicalBeats =
+        bounds.startBeat;
+
+    playbackStartAudioTime =
+        audioContext.currentTime -
+        (bounds.startBeat *
+        secondsPerBeat());
+
+    scheduleGuideFromBeat(
+        bounds.startBeat,
+        bounds.endBeat
+    );
+
+    scheduleMetronomeFromBeat(
+        bounds.startBeat,
+        false,
+        bounds.endBeat
+    );
+
+    highlightEvent(
+        bounds.startIndex
+    );
+
+    if (window.setTimelineBeatPosition) {
+        window.setTimelineBeatPosition(
+            bounds.startBeat
         );
     }
 }
@@ -999,7 +1199,24 @@ function updateTimelineAndHighlight() {
         highlightEvent(activeIndex);
     }
 
-    if (beat >= getTotalBeats()) {
+    const playbackEnd =
+        isLoopEnabled()
+            ? getLoopBounds().endBeat
+            : getTotalBeats();
+
+    if (beat >= playbackEnd) {
+
+        if (isLoopEnabled()) {
+
+            restartLoopCycle();
+
+            animationFrame =
+                requestAnimationFrame(
+                    updateTimelineAndHighlight
+                );
+
+            return;
+        }
 
         finishPlayback();
         return;
@@ -1016,7 +1233,10 @@ function updateTimelineAndHighlight() {
    Guide scheduling
    ========================================================= */
 
-function scheduleGuideFromBeat(startBeat) {
+function scheduleGuideFromBeat(
+    startBeat,
+    endBeat = null
+) {
 
     const secPerBeat =
         secondsPerBeat();
@@ -1038,15 +1258,34 @@ function scheduleGuideFromBeat(startBeat) {
             return;
         }
 
+        if (
+            endBeat !== null &&
+            note.offset >= endBeat
+        ) {
+            return;
+        }
+
         const effectiveStartBeat =
             Math.max(
                 note.offset,
                 startBeat
             );
 
+        const effectiveEndBeat =
+            endBeat === null
+                ? noteEndBeat
+                : Math.min(
+                    noteEndBeat,
+                    endBeat
+                );
+
         const remainingDurationBeats =
-            noteEndBeat -
+            effectiveEndBeat -
             effectiveStartBeat;
+
+        if (remainingDurationBeats <= 0) {
+            return;
+        }
 
         const startTime =
             playbackStartAudioTime +
@@ -1108,8 +1347,26 @@ async function startPlayback() {
     const secPerBeat =
         secondsPerBeat();
 
+    const bounds =
+        getLoopBounds();
+
+    if (
+        isLoopEnabled() &&
+        (
+            pausedMusicalBeats <
+                bounds.startBeat ||
+            pausedMusicalBeats >=
+                bounds.endBeat
+        )
+    ) {
+        pausedMusicalBeats =
+            bounds.startBeat;
+    }
+
     const startingFresh =
-        pausedMusicalBeats <= 0.0001;
+        isLoopEnabled()
+            ? !loopHasCountedIn
+            : pausedMusicalBeats <= 0.0001;
 
     const countInDuration =
         startingFresh
@@ -1135,14 +1392,28 @@ async function startPlayback() {
         (pausedMusicalBeats *
         secPerBeat);
 
+    const playbackEnd =
+        isLoopEnabled()
+            ? bounds.endBeat
+            : null;
+
     scheduleGuideFromBeat(
-        pausedMusicalBeats
+        pausedMusicalBeats,
+        playbackEnd
     );
 
     scheduleMetronomeFromBeat(
         pausedMusicalBeats,
-        startingFresh
+        startingFresh,
+        playbackEnd
     );
+
+    if (
+        startingFresh &&
+        isLoopEnabled()
+    ) {
+        loopHasCountedIn = true;
+    }
 
     animationFrame =
         requestAnimationFrame(
@@ -1206,6 +1477,7 @@ function finishPlayback() {
     }
 
     pausedMusicalBeats = 0;
+    loopHasCountedIn = false;
 
     setCountInDisplay(null);
 
@@ -1299,6 +1571,9 @@ function loadTutorialPlayer(notes) {
     }
 
     highlightEvent(0);
+
+    loopHasCountedIn = false;
+    populateLoopSelectors();
 
     /*
      * If the browser has already created an AudioContext,
@@ -1420,6 +1695,107 @@ document.addEventListener(
             );
 
         wireAudioControls();
+
+        const loopEnabled =
+            document.getElementById(
+                "loop-enabled"
+            );
+
+        const loopStart =
+            document.getElementById(
+                "loop-start"
+            );
+
+        const loopEnd =
+            document.getElementById(
+                "loop-end"
+            );
+
+        loopEnabled?.addEventListener(
+            "change",
+            () => {
+
+                const enabled =
+                    loopEnabled.checked;
+
+                if (loopStart) {
+                    loopStart.disabled =
+                        !enabled;
+                }
+
+                if (loopEnd) {
+                    loopEnd.disabled =
+                        !enabled;
+                }
+
+                loopHasCountedIn = false;
+
+                if (isPlaying) {
+                    pausePlayback();
+                }
+
+                if (enabled) {
+
+                    const bounds =
+                        getLoopBounds();
+
+                    pausedMusicalBeats =
+                        bounds.startBeat;
+
+                    highlightEvent(
+                        bounds.startIndex
+                    );
+
+                    if (
+                        window
+                            .setTimelineBeatPosition
+                    ) {
+                        window.setTimelineBeatPosition(
+                            bounds.startBeat
+                        );
+                    }
+                }
+            }
+        );
+
+        [loopStart, loopEnd]
+            .forEach(select => {
+
+                select?.addEventListener(
+                    "change",
+                    () => {
+
+                        loopHasCountedIn =
+                            false;
+
+                        if (isPlaying) {
+                            pausePlayback();
+                        }
+
+                        if (isLoopEnabled()) {
+
+                            const bounds =
+                                getLoopBounds();
+
+                            pausedMusicalBeats =
+                                bounds.startBeat;
+
+                            highlightEvent(
+                                bounds.startIndex
+                            );
+
+                            if (
+                                window
+                                    .setTimelineBeatPosition
+                            ) {
+                                window.setTimelineBeatPosition(
+                                    bounds.startBeat
+                                );
+                            }
+                        }
+                    }
+                );
+            });
 
     }
 );

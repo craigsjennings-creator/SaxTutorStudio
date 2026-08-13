@@ -385,6 +385,53 @@
     }
 }
 
+
+.loop-controls {
+    margin-top: 16px;
+    padding: 18px 20px;
+    background: #15181e;
+    border: 1px solid #30343d;
+    border-radius: 12px;
+}
+
+.loop-controls-title {
+    margin-bottom: 14px;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: #aab2c0;
+    text-transform: uppercase;
+}
+
+.loop-enable-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.loop-range-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 80px 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.loop-range-row select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 7px;
+    background: #20242b;
+    color: white;
+    border: 1px solid #444b57;
+}
+
+@media (max-width: 650px) {
+    .loop-range-row {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* =========================================
    Tutorial Timeline
    ========================================= */
@@ -680,6 +727,36 @@
         >
             55%
         </span>
+    </div>
+</div>
+
+<div class="loop-controls">
+    <div class="loop-controls-title">
+        Practice Loop
+    </div>
+
+    <label class="loop-enable-row">
+        <input
+            type="checkbox"
+            id="loop-enabled"
+        >
+        Loop selected notes
+    </label>
+
+    <div class="loop-range-row">
+        <label for="loop-start">Start</label>
+
+        <select
+            id="loop-start"
+            disabled
+        ></select>
+
+        <label for="loop-end">End</label>
+
+        <select
+            id="loop-end"
+            disabled
+        ></select>
     </div>
 </div>
 
@@ -1243,6 +1320,6 @@ window.setTimelineBeatPosition = setTimelineBeatPosition;
 
 </script>
 <script src="/static/js/fingering.js?v=5"></script>
-<script src="/static/js/player.js?v=7"></script>
+<script src="/static/js/player.js?v=8"></script>
 </body>
 </html>
