@@ -1,25 +1,30 @@
 /*
- * YourMusicTutorial - Master Playback Engine
+ * YourMusicTutorial - Master Playback Engine v2
  *
  * Web Audio's AudioContext clock is the single source of truth.
- * That same clock drives:
- *   - guide-note audio
- *   - count-in
- *   - timeline position
- *   - current-note highlighting
+ * It drives guide audio, metronome, timeline movement and
+ * current-note highlighting.
  *
- * This avoids audio/animation drift.
+ * The guide sound is still synthesized, but now uses:
+ *   - layered oscillators
+ *   - harmonic shaping
+ *   - low-pass filtering
+ *   - breath-like noise
+ *   - a gentle vibrato
+ *
+ * That gives a more sax-like practice sound without requiring
+ * external samples yet.
  */
 
 let tutorialNotes = [];
-let playableEvents = [];
 let currentEventIndex = 0;
 
 let audioContext = null;
-let masterGain = null;
+let guideBus = null;
+let metronomeBus = null;
+let masterBus = null;
 
 let isPlaying = false;
-let isCountingIn = false;
 
 let playbackStartAudioTime = 0;
 let pausedMusicalBeats = 0;
@@ -46,14 +51,22 @@ function ensureAudioContext() {
         audioContext =
             new AudioContextClass();
 
-        masterGain =
+        masterBus =
             audioContext.createGain();
 
-        masterGain.gain.value = 0.18;
+        guideBus =
+            audioContext.createGain();
 
-        masterGain.connect(
-            audioContext.destination
-        );
+        metronomeBus =
+            audioContext.createGain();
+
+        guideBus.connect(masterBus);
+        metronomeBus.connect(masterBus);
+        masterBus.connect(audioContext.destination);
+
+        masterBus.gain.value = 0.9;
+
+        updateAudioControlGains();
     }
 
     if (audioContext.state === "suspended") {
@@ -79,6 +92,57 @@ function secondsPerBeat() {
         60 /
         BASE_BPM /
         getSpeed()
+    );
+}
+
+
+function updateAudioControlGains() {
+
+    if (!audioContext) {
+        return;
+    }
+
+    const now =
+        audioContext.currentTime;
+
+    const guideEnabled =
+        document.getElementById(
+            "guide-enabled"
+        )?.checked ?? true;
+
+    const metronomeEnabled =
+        document.getElementById(
+            "metronome-enabled"
+        )?.checked ?? true;
+
+    const guideVolume =
+        parseFloat(
+            document.getElementById(
+                "guide-volume"
+            )?.value ?? "70"
+        ) / 100;
+
+    const metronomeVolume =
+        parseFloat(
+            document.getElementById(
+                "metronome-volume"
+            )?.value ?? "55"
+        ) / 100;
+
+    guideBus.gain.setTargetAtTime(
+        guideEnabled
+            ? guideVolume
+            : 0,
+        now,
+        0.01
+    );
+
+    metronomeBus.gain.setTargetAtTime(
+        metronomeEnabled
+            ? metronomeVolume
+            : 0,
+        now,
+        0.01
     );
 }
 
@@ -127,11 +191,10 @@ function noteNameToMidi(noteName) {
     const [, letter, accidental, octaveText] =
         match;
 
-    const pitchName =
-        `${letter}${accidental}`;
-
     const semitone =
-        NOTE_TO_SEMITONE[pitchName];
+        NOTE_TO_SEMITONE[
+            `${letter}${accidental}`
+        ];
 
     if (semitone === undefined) {
         return null;
@@ -160,7 +223,7 @@ function midiToFrequency(midi) {
 
 
 /* =========================================================
-   Guide tone
+   More sax-like guide tone
    ========================================================= */
 
 function stopScheduledAudio() {
@@ -170,12 +233,106 @@ function stopScheduledAudio() {
         try {
             source.stop();
         } catch (error) {
-            // Source may already be stopped.
+            // Already stopped.
         }
 
     });
 
     scheduledSources = [];
+}
+
+
+function createBreathNoise(
+    startTime,
+    durationSeconds
+) {
+
+    const sampleRate =
+        audioContext.sampleRate;
+
+    const frameCount =
+        Math.max(
+            1,
+            Math.floor(
+                sampleRate *
+                Math.min(
+                    durationSeconds + 0.1,
+                    6
+                )
+            )
+        );
+
+    const buffer =
+        audioContext.createBuffer(
+            1,
+            frameCount,
+            sampleRate
+        );
+
+    const data =
+        buffer.getChannelData(0);
+
+    for (let i = 0; i < frameCount; i++) {
+
+        /*
+         * Very low-level noise gives the note a little
+         * breath/air without overwhelming the pitch.
+         */
+        data[i] =
+            (Math.random() * 2 - 1) *
+            0.16;
+    }
+
+    const source =
+        audioContext.createBufferSource();
+
+    source.buffer = buffer;
+
+    const filter =
+        audioContext.createBiquadFilter();
+
+    filter.type = "bandpass";
+    filter.frequency.value = 2300;
+    filter.Q.value = 0.7;
+
+    const gain =
+        audioContext.createGain();
+
+    gain.gain.setValueAtTime(
+        0.0001,
+        startTime
+    );
+
+    gain.gain.linearRampToValueAtTime(
+        0.06,
+        startTime + 0.03
+    );
+
+    gain.gain.setValueAtTime(
+        0.05,
+        Math.max(
+            startTime + 0.03,
+            startTime + durationSeconds - 0.05
+        )
+    );
+
+    gain.gain.linearRampToValueAtTime(
+        0.0001,
+        startTime + durationSeconds
+    );
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(guideBus);
+
+    source.start(startTime);
+    source.stop(
+        startTime +
+        durationSeconds +
+        0.02
+    );
+
+    scheduledSources.push(source);
 }
 
 
@@ -192,22 +349,46 @@ function scheduleGuideTone(
         return;
     }
 
-    const oscillator =
-        audioContext.createOscillator();
+    const frequency =
+        midiToFrequency(midi);
 
     const noteGain =
         audioContext.createGain();
 
-    oscillator.type = "triangle";
+    const filter =
+        audioContext.createBiquadFilter();
 
-    oscillator.frequency.value =
-        midiToFrequency(midi);
+    filter.type = "lowpass";
 
     /*
-     * Short attack/release prevents clicks.
+     * Keep low notes warm and allow more brightness
+     * as pitch rises.
      */
-    const attack = 0.015;
-    const release = 0.04;
+    filter.frequency.value =
+        Math.min(
+            5200,
+            Math.max(
+                1800,
+                frequency * 8
+            )
+        );
+
+    filter.Q.value = 1.2;
+
+    noteGain.connect(filter);
+    filter.connect(guideBus);
+
+    const attack = 0.035;
+    const release =
+        Math.min(
+            0.12,
+            Math.max(
+                0.05,
+                durationSeconds * 0.12
+            )
+        );
+
+    const sustainLevel = 0.24;
 
     noteGain.gain.setValueAtTime(
         0.0001,
@@ -215,7 +396,7 @@ function scheduleGuideTone(
     );
 
     noteGain.gain.exponentialRampToValueAtTime(
-        0.32,
+        sustainLevel,
         startTime + attack
     );
 
@@ -228,7 +409,7 @@ function scheduleGuideTone(
         );
 
     noteGain.gain.setValueAtTime(
-        0.32,
+        sustainLevel,
         releaseStart
     );
 
@@ -238,28 +419,108 @@ function scheduleGuideTone(
         durationSeconds
     );
 
-    oscillator.connect(noteGain);
-    noteGain.connect(masterGain);
+    /*
+     * Fundamental plus two harmonics.
+     * The mix is intentionally restrained so it stays
+     * useful as a guide tone rather than becoming harsh.
+     */
+    const partials = [
+        {
+            multiplier: 1,
+            type: "sawtooth",
+            level: 0.58
+        },
+        {
+            multiplier: 2,
+            type: "sine",
+            level: 0.21
+        },
+        {
+            multiplier: 3,
+            type: "sine",
+            level: 0.09
+        }
+    ];
 
-    oscillator.start(startTime);
+    const vibrato =
+        audioContext.createOscillator();
 
-    oscillator.stop(
+    const vibratoGain =
+        audioContext.createGain();
+
+    vibrato.type = "sine";
+    vibrato.frequency.value = 5.2;
+
+    /*
+     * About +/- 4 cents-ish depending on frequency.
+     * Kept subtle for beginner practice.
+     */
+    vibratoGain.gain.value =
+        frequency * 0.0022;
+
+    vibrato.connect(vibratoGain);
+
+    partials.forEach(partial => {
+
+        const osc =
+            audioContext.createOscillator();
+
+        const partialGain =
+            audioContext.createGain();
+
+        osc.type = partial.type;
+
+        osc.frequency.value =
+            frequency *
+            partial.multiplier;
+
+        partialGain.gain.value =
+            partial.level;
+
+        /*
+         * Vibrato is most useful on the fundamental.
+         */
+        if (partial.multiplier === 1) {
+            vibratoGain.connect(
+                osc.frequency
+            );
+        }
+
+        osc.connect(partialGain);
+        partialGain.connect(noteGain);
+
+        osc.start(startTime);
+
+        osc.stop(
+            startTime +
+            durationSeconds +
+            0.03
+        );
+
+        scheduledSources.push(osc);
+    });
+
+    vibrato.start(startTime);
+    vibrato.stop(
         startTime +
         durationSeconds +
-        0.02
+        0.03
     );
 
-    scheduledSources.push(
-        oscillator
+    scheduledSources.push(vibrato);
+
+    createBreathNoise(
+        startTime,
+        durationSeconds
     );
 }
 
 
 /* =========================================================
-   Count-in click
+   Metronome
    ========================================================= */
 
-function scheduleCountInClick(
+function scheduleMetronomeClick(
     when,
     strong = false
 ) {
@@ -273,30 +534,91 @@ function scheduleCountInClick(
     osc.type = "square";
 
     osc.frequency.value =
-        strong ? 1200 : 850;
+        strong ? 1250 : 900;
 
     gain.gain.setValueAtTime(
-        strong ? 0.16 : 0.10,
+        strong ? 0.18 : 0.11,
         when
     );
 
     gain.gain.exponentialRampToValueAtTime(
         0.0001,
-        when + 0.06
+        when + 0.055
     );
 
     osc.connect(gain);
-    gain.connect(masterGain);
+    gain.connect(metronomeBus);
 
     osc.start(when);
-    osc.stop(when + 0.07);
+    osc.stop(when + 0.06);
 
     scheduledSources.push(osc);
 }
 
 
+function scheduleMetronomeFromBeat(
+    startBeat,
+    includeCountIn
+) {
+
+    const secPerBeat =
+        secondsPerBeat();
+
+    const totalBeats =
+        getTotalBeats();
+
+    if (includeCountIn) {
+
+        for (
+            let beat = 0;
+            beat < COUNT_IN_BEATS;
+            beat++
+        ) {
+
+            scheduleMetronomeClick(
+                audioContext.currentTime +
+                (beat * secPerBeat),
+                beat === 0
+            );
+        }
+    }
+
+    /*
+     * Schedule clicks on each musical quarter beat.
+     */
+    const firstBeat =
+        Math.ceil(startBeat);
+
+    for (
+        let beat = firstBeat;
+        beat <= Math.ceil(totalBeats);
+        beat++
+    ) {
+
+        const when =
+            playbackStartAudioTime +
+            (beat * secPerBeat);
+
+        if (
+            when <
+            audioContext.currentTime - 0.01
+        ) {
+            continue;
+        }
+
+        /*
+         * Accent every fourth beat for orientation.
+         */
+        scheduleMetronomeClick(
+            when,
+            beat % 4 === 0
+        );
+    }
+}
+
+
 /* =========================================================
-   Timeline + UI
+   Count-in + timeline UI
    ========================================================= */
 
 function setCountInDisplay(value) {
@@ -321,10 +643,7 @@ function setCountInDisplay(value) {
     }
 
     overlay.textContent = value;
-
-    overlay.classList.add(
-        "visible"
-    );
+    overlay.classList.add("visible");
 }
 
 
@@ -362,6 +681,21 @@ function currentMusicalBeat() {
 }
 
 
+function getTotalBeats() {
+
+    if (!tutorialNotes.length) {
+        return 0;
+    }
+
+    return Math.max(
+        ...tutorialNotes.map(note =>
+            note.offset +
+            note.duration
+        )
+    );
+}
+
+
 function updateTimelineAndHighlight() {
 
     if (!isPlaying) {
@@ -377,9 +711,6 @@ function updateTimelineAndHighlight() {
         );
     }
 
-    /*
-     * Count-in uses negative musical beats.
-     */
     if (beat < 0) {
 
         const countBeat =
@@ -439,10 +770,7 @@ function updateTimelineAndHighlight() {
         highlightEvent(activeIndex);
     }
 
-    const totalBeats =
-        getTotalBeats();
-
-    if (beat >= totalBeats) {
+    if (beat >= getTotalBeats()) {
 
         finishPlayback();
         return;
@@ -455,26 +783,11 @@ function updateTimelineAndHighlight() {
 }
 
 
-function getTotalBeats() {
-
-    if (!tutorialNotes.length) {
-        return 0;
-    }
-
-    return Math.max(
-        ...tutorialNotes.map(note =>
-            note.offset +
-            note.duration
-        )
-    );
-}
-
-
 /* =========================================================
-   Scheduling
+   Guide scheduling
    ========================================================= */
 
-function scheduleFromBeat(startBeat) {
+function scheduleGuideFromBeat(startBeat) {
 
     const secPerBeat =
         secondsPerBeat();
@@ -539,22 +852,12 @@ function startPlayback() {
     }
 
     ensureAudioContext();
-
+    updateAudioControlGains();
     stopScheduledAudio();
-
-    const playButton =
-        document.getElementById(
-            "play-button"
-        );
 
     const secPerBeat =
         secondsPerBeat();
 
-    /*
-     * If starting from the beginning,
-     * give a four-beat count-in.
-     * Resuming from pause does not count in again.
-     */
     const startingFresh =
         pausedMusicalBeats <= 0.0001;
 
@@ -565,7 +868,11 @@ function startPlayback() {
             : 0;
 
     isPlaying = true;
-    isCountingIn = startingFresh;
+
+    const playButton =
+        document.getElementById(
+            "play-button"
+        );
 
     if (playButton) {
         playButton.textContent =
@@ -578,32 +885,14 @@ function startPlayback() {
         (pausedMusicalBeats *
         secPerBeat);
 
-    if (startingFresh) {
+    scheduleGuideFromBeat(
+        pausedMusicalBeats
+    );
 
-        for (
-            let beat = 0;
-            beat < COUNT_IN_BEATS;
-            beat++
-        ) {
-
-            scheduleCountInClick(
-                audioContext.currentTime +
-                (beat * secPerBeat),
-                beat === 0
-            );
-        }
-
-        /*
-         * Begin the guide audio after the count-in.
-         */
-        scheduleFromBeat(0);
-
-    } else {
-
-        scheduleFromBeat(
-            pausedMusicalBeats
-        );
-    }
+    scheduleMetronomeFromBeat(
+        pausedMusicalBeats,
+        startingFresh
+    );
 
     animationFrame =
         requestAnimationFrame(
@@ -625,7 +914,6 @@ function pausePlayback() {
         );
 
     isPlaying = false;
-    isCountingIn = false;
 
     stopScheduledAudio();
 
@@ -655,7 +943,6 @@ function pausePlayback() {
 function finishPlayback() {
 
     isPlaying = false;
-    isCountingIn = false;
 
     stopScheduledAudio();
 
@@ -706,7 +993,9 @@ function seekToEvent(index) {
         return;
     }
 
-    pausePlayback();
+    if (isPlaying) {
+        pausePlayback();
+    }
 
     currentEventIndex =
         Math.max(
@@ -722,9 +1011,7 @@ function seekToEvent(index) {
             currentEventIndex
         ].offset;
 
-    highlightEvent(
-        currentEventIndex
-    );
+    highlightEvent(currentEventIndex);
 
     if (window.setTimelineBeatPosition) {
         window.setTimelineBeatPosition(
@@ -735,18 +1022,12 @@ function seekToEvent(index) {
 
 
 function previousNote() {
-
-    seekToEvent(
-        currentEventIndex - 1
-    );
+    seekToEvent(currentEventIndex - 1);
 }
 
 
 function nextNote() {
-
-    seekToEvent(
-        currentEventIndex + 1
-    );
+    seekToEvent(currentEventIndex + 1);
 }
 
 
@@ -757,13 +1038,6 @@ function nextNote() {
 function loadTutorialPlayer(notes) {
 
     tutorialNotes = notes;
-
-    playableEvents =
-        notes.filter(
-            note =>
-                note.type !== "rest" &&
-                note.pitch !== "REST"
-        );
 
     currentEventIndex = 0;
     pausedMusicalBeats = 0;
@@ -779,8 +1053,65 @@ function loadTutorialPlayer(notes) {
 
 
 /* =========================================================
-   Button wiring
+   UI wiring
    ========================================================= */
+
+function wireAudioControls() {
+
+    const pairs = [
+        {
+            slider: "guide-volume",
+            output: "guide-volume-value"
+        },
+        {
+            slider: "metronome-volume",
+            output: "metronome-volume-value"
+        }
+    ];
+
+    pairs.forEach(pair => {
+
+        const slider =
+            document.getElementById(
+                pair.slider
+            );
+
+        const output =
+            document.getElementById(
+                pair.output
+            );
+
+        slider?.addEventListener(
+            "input",
+            () => {
+
+                if (output) {
+                    output.textContent =
+                        `${slider.value}%`;
+                }
+
+                updateAudioControlGains();
+            }
+        );
+    });
+
+    document
+        .getElementById("guide-enabled")
+        ?.addEventListener(
+            "change",
+            updateAudioControlGains
+        );
+
+    document
+        .getElementById(
+            "metronome-enabled"
+        )
+        ?.addEventListener(
+            "change",
+            updateAudioControlGains
+        );
+}
+
 
 document.addEventListener(
     "DOMContentLoaded",
@@ -813,23 +1144,24 @@ document.addEventListener(
                 nextNote
             );
 
-        /*
-         * Changing speed while paused is immediate.
-         * If changed during playback, pause first so
-         * the master clock can be rescheduled cleanly.
-         */
         document
             .getElementById("speed")
             ?.addEventListener(
                 "change",
                 () => {
 
+                    /*
+                     * Reschedule against the master audio clock
+                     * whenever practice speed changes.
+                     */
                     if (isPlaying) {
                         pausePlayback();
                     }
 
                 }
             );
+
+        wireAudioControls();
 
     }
 );

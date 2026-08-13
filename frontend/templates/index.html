@@ -327,6 +327,64 @@
     border: 1px solid #444b57;
 }
 
+
+/* =========================================
+   Audio Controls
+   ========================================= */
+
+.audio-controls {
+    margin-top: 22px;
+    padding: 18px 20px;
+    background: #15181e;
+    border: 1px solid #30343d;
+    border-radius: 12px;
+}
+
+.audio-controls-title {
+    margin-bottom: 14px;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: #aab2c0;
+    text-transform: uppercase;
+}
+
+.audio-control-row {
+    display: grid;
+    grid-template-columns: 120px 1fr 52px;
+    gap: 12px;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.audio-control-row label {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: #e7eaf0;
+}
+
+.audio-control-row input[type="range"] {
+    width: 100%;
+}
+
+.audio-value {
+    text-align: right;
+    color: #929baa;
+    font-family: monospace;
+}
+
+@media (max-width: 650px) {
+    .audio-control-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    .audio-value {
+        text-align: left;
+    }
+}
+
 /* =========================================
    Tutorial Timeline
    ========================================= */
@@ -566,7 +624,66 @@
     </select>
 
 </div>   
-        <div class="tutorial-timeline">
+        
+<div class="audio-controls">
+    <div class="audio-controls-title">
+        Practice Audio
+    </div>
+
+    <div class="audio-control-row">
+        <label>
+            <input
+                type="checkbox"
+                id="guide-enabled"
+                checked
+            >
+            Guide Sax
+        </label>
+
+        <input
+            type="range"
+            id="guide-volume"
+            min="0"
+            max="100"
+            value="70"
+        >
+
+        <span
+            class="audio-value"
+            id="guide-volume-value"
+        >
+            70%
+        </span>
+    </div>
+
+    <div class="audio-control-row">
+        <label>
+            <input
+                type="checkbox"
+                id="metronome-enabled"
+                checked
+            >
+            Metronome
+        </label>
+
+        <input
+            type="range"
+            id="metronome-volume"
+            min="0"
+            max="100"
+            value="55"
+        >
+
+        <span
+            class="audio-value"
+            id="metronome-volume-value"
+        >
+            55%
+        </span>
+    </div>
+</div>
+
+<div class="tutorial-timeline">
 
     <!-- Notes -->
     <div class="timeline-notes"></div>
@@ -1126,6 +1243,6 @@ window.setTimelineBeatPosition = setTimelineBeatPosition;
 
 </script>
 <script src="/static/js/fingering.js?v=5"></script>
-<script src="/static/js/player.js?v=6"></script>
+<script src="/static/js/player.js?v=7"></script>
 </body>
 </html>
