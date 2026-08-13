@@ -417,6 +417,15 @@
     box-shadow: 0 0 12px rgba(79, 124, 255, 0.35);
 }
 
+/*
+ * Auxiliary sax keys use a thinner bar so the six main
+ * finger lanes remain visually dominant.
+ */
+.finger-bar.auxiliary {
+    height: 20px;
+    top: 17px;
+}
+
 /* Fixed playback position */
 
 .timeline-playhead {
@@ -878,6 +887,19 @@ function buildTutorialTimeline(notes) {
 
             const bar = document.createElement("div");
             bar.className = "finger-bar active";
+
+            const mainFingerKeys = [
+                "left_1",
+                "left_2",
+                "left_3",
+                "right_1",
+                "right_2",
+                "right_3"
+            ];
+
+            if (!mainFingerKeys.includes(key)) {
+                bar.classList.add("auxiliary");
+            }
 
             bar.style.left = `${startPixels}px`;
             bar.style.width = `${widthPixels}px`;
