@@ -1,0 +1,37 @@
+YourMusicTutorial - Iowa Alto Sax mf sample split report
+==========================================================
+
+Db3.wav    3.03s   source=AltoSax.NoVib.mf.Db3B3.aiff
+D3.wav     3.12s   source=AltoSax.NoVib.mf.Db3B3.aiff
+Eb3.wav    2.67s   source=AltoSax.NoVib.mf.Db3B3.aiff
+E3.wav     3.15s   source=AltoSax.NoVib.mf.Db3B3.aiff
+F3.wav     2.62s   source=AltoSax.NoVib.mf.Db3B3.aiff
+Gb3.wav    2.77s   source=AltoSax.NoVib.mf.Db3B3.aiff
+G3.wav     2.70s   source=AltoSax.NoVib.mf.Db3B3.aiff
+Ab3.wav    2.55s   source=AltoSax.NoVib.mf.Db3B3.aiff
+A3.wav     3.24s   source=AltoSax.NoVib.mf.Db3B3.aiff
+Bb3.wav    2.76s   source=AltoSax.NoVib.mf.Db3B3.aiff
+B3.wav     2.50s   source=AltoSax.NoVib.mf.Db3B3.aiff
+C4.wav     2.75s   source=AltoSax.NoVib.mf.C4B4.aiff
+Db4.wav    3.19s   source=AltoSax.NoVib.mf.C4B4.aiff
+D4.wav     2.63s   source=AltoSax.NoVib.mf.C4B4.aiff
+Eb4.wav    2.58s   source=AltoSax.NoVib.mf.C4B4.aiff
+E4.wav     2.35s   source=AltoSax.NoVib.mf.C4B4.aiff
+F4.wav     2.50s   source=AltoSax.NoVib.mf.C4B4.aiff
+Gb4.wav    2.89s   source=AltoSax.NoVib.mf.C4B4.aiff
+G4.wav     2.59s   source=AltoSax.NoVib.mf.C4B4.aiff
+Ab4.wav    2.88s   source=AltoSax.NoVib.mf.C4B4.aiff
+A4.wav     2.32s   source=AltoSax.NoVib.mf.C4B4.aiff
+Bb4.wav    2.49s   source=AltoSax.NoVib.mf.C4B4.aiff
+B4.wav     2.52s   source=AltoSax.NoVib.mf.C4B4.aiff
+C5.wav     2.25s   source=AltoSax.NoVib.mf.C5Ab5.aiff
+Db5.wav    2.35s   source=AltoSax.NoVib.mf.C5Ab5.aiff
+D5.wav     2.47s   source=AltoSax.NoVib.mf.C5Ab5.aiff
+Eb5.wav    2.24s   source=AltoSax.NoVib.mf.C5Ab5.aiff
+E5.wav     2.49s   source=AltoSax.NoVib.mf.C5Ab5.aiff
+F5.wav     2.43s   source=AltoSax.NoVib.mf.C5Ab5.aiff
+Gb5.wav    2.59s   source=AltoSax.NoVib.mf.C5Ab5.aiff
+G5.wav     3.16s   source=AltoSax.NoVib.mf.C5Ab5.aiff
+Ab5.wav    2.86s   source=AltoSax.NoVib.mf.C5Ab5.aiff
+
+Total samples: 32

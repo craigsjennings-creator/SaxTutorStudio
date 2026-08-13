@@ -35,6 +35,25 @@ let scheduledSources = [];
 const BASE_BPM = 120;
 const COUNT_IN_BEATS = 4;
 
+/*
+ * Real Iowa Alto Sax sample bank.
+ * These are the 32 WAV files created by split_iowa_alto.py.
+ */
+const ALTO_SAMPLE_BASE =
+    "/static/audio/saxophone/alto/samples/mf/";
+
+const ALTO_SAMPLE_NOTES = [
+    "Db3", "D3", "Eb3", "E3", "F3", "Gb3",
+    "G3", "Ab3", "A3", "Bb3", "B3",
+    "C4", "Db4", "D4", "Eb4", "E4", "F4",
+    "Gb4", "G4", "Ab4", "A4", "Bb4", "B4",
+    "C5", "Db5", "D5", "Eb5", "E5", "F5",
+    "Gb5", "G5", "Ab5"
+];
+
+const altoSampleBuffers = new Map();
+let altoSamplesLoadingPromise = null;
+
 
 /* =========================================================
    Audio setup
@@ -223,6 +242,216 @@ function midiToFrequency(midi) {
 
 
 /* =========================================================
+   Real Alto Sax sample loading
+   ========================================================= */
+
+function normaliseSamplePitch(noteName) {
+
+    const match =
+        String(noteName).match(
+            /^([A-G])([#b-]?)(-?\d+)$/
+        );
+
+    if (!match) {
+        return null;
+    }
+
+    const [, letter, accidental, octave] =
+        match;
+
+    const sharpToFlat = {
+        "C#": "Db",
+        "D#": "Eb",
+        "F#": "Gb",
+        "G#": "Ab",
+        "A#": "Bb"
+    };
+
+    let pitchClass =
+        `${letter}${accidental}`;
+
+    /*
+     * music21 may represent flats with "-" (e.g. B-4).
+     */
+    if (accidental === "-") {
+        pitchClass = `${letter}b`;
+    }
+
+    if (sharpToFlat[pitchClass]) {
+        pitchClass =
+            sharpToFlat[pitchClass];
+    }
+
+    return `${pitchClass}${octave}`;
+}
+
+
+async function loadAudioBuffer(url) {
+
+    const response =
+        await fetch(url);
+
+    if (!response.ok) {
+        throw new Error(
+            `HTTP ${response.status} loading ${url}`
+        );
+    }
+
+    const bytes =
+        await response.arrayBuffer();
+
+    return await audioContext.decodeAudioData(
+        bytes
+    );
+}
+
+
+async function preloadAltoSamples() {
+
+    ensureAudioContext();
+
+    if (altoSamplesLoadingPromise) {
+        return altoSamplesLoadingPromise;
+    }
+
+    altoSamplesLoadingPromise =
+        Promise.all(
+            ALTO_SAMPLE_NOTES.map(
+                async noteName => {
+
+                    try {
+
+                        const buffer =
+                            await loadAudioBuffer(
+                                `${ALTO_SAMPLE_BASE}${noteName}.wav`
+                            );
+
+                        altoSampleBuffers.set(
+                            noteName,
+                            buffer
+                        );
+
+                    } catch (error) {
+
+                        console.warn(
+                            `Could not preload Alto sample ${noteName}:`,
+                            error
+                        );
+                    }
+                }
+            )
+        ).then(() => {
+
+            console.log(
+                `Loaded ${altoSampleBuffers.size}/${ALTO_SAMPLE_NOTES.length} real Alto Sax samples.`
+            );
+
+            return altoSampleBuffers.size;
+        });
+
+    return altoSamplesLoadingPromise;
+}
+
+
+function scheduleRealSaxSample(
+    noteName,
+    startTime,
+    durationSeconds
+) {
+
+    const samplePitch =
+        normaliseSamplePitch(noteName);
+
+    const buffer =
+        samplePitch
+            ? altoSampleBuffers.get(
+                samplePitch
+            )
+            : null;
+
+    if (!buffer) {
+        return false;
+    }
+
+    const source =
+        audioContext.createBufferSource();
+
+    source.buffer = buffer;
+
+    const envelope =
+        audioContext.createGain();
+
+    /*
+     * Keep the natural recorded attack.
+     * Fade the end to avoid a hard cut when MusicXML asks
+     * for a shorter duration than the original recording.
+     */
+    const attack = 0.008;
+    const release =
+        Math.min(
+            0.08,
+            Math.max(
+                0.025,
+                durationSeconds * 0.12
+            )
+        );
+
+    envelope.gain.setValueAtTime(
+        0.0001,
+        startTime
+    );
+
+    envelope.gain.linearRampToValueAtTime(
+        0.9,
+        startTime + attack
+    );
+
+    const releaseStart =
+        Math.max(
+            startTime + attack,
+            startTime +
+            durationSeconds -
+            release
+        );
+
+    envelope.gain.setValueAtTime(
+        0.9,
+        releaseStart
+    );
+
+    envelope.gain.linearRampToValueAtTime(
+        0.0001,
+        startTime +
+        durationSeconds
+    );
+
+    source.connect(envelope);
+    envelope.connect(guideBus);
+
+    source.start(
+        startTime,
+        0,
+        Math.min(
+            buffer.duration,
+            durationSeconds + 0.02
+        )
+    );
+
+    source.stop(
+        startTime +
+        Math.min(
+            buffer.duration,
+            durationSeconds + 0.02
+        )
+    );
+
+    scheduledSources.push(source);
+
+    return true;
+}
+
+
+/* =========================================================
    More sax-like guide tone
    ========================================================= */
 
@@ -336,7 +565,7 @@ function createBreathNoise(
 }
 
 
-function scheduleGuideTone(
+function scheduleSynthGuideTone(
     noteName,
     startTime,
     durationSeconds
@@ -828,11 +1057,25 @@ function scheduleGuideFromBeat(startBeat) {
             remainingDurationBeats *
             secPerBeat;
 
-        scheduleGuideTone(
-            note.pitch,
-            startTime,
-            durationSeconds
-        );
+        const usedRealSample =
+            scheduleRealSaxSample(
+                note.pitch,
+                startTime,
+                durationSeconds
+            );
+
+        /*
+         * Outside the Iowa sample range, or if a WAV failed
+         * to load, retain the existing synthesized guide so
+         * the tutorial never becomes silent.
+         */
+        if (!usedRealSample) {
+            scheduleSynthGuideTone(
+                note.pitch,
+                startTime,
+                durationSeconds
+            );
+        }
     });
 }
 
@@ -841,7 +1084,7 @@ function scheduleGuideFromBeat(startBeat) {
    Playback controls
    ========================================================= */
 
-function startPlayback() {
+async function startPlayback() {
 
     if (!tutorialNotes.length) {
         return;
@@ -853,6 +1096,13 @@ function startPlayback() {
 
     ensureAudioContext();
     updateAudioControlGains();
+
+    /*
+     * First play waits for the real sax bank to be decoded.
+     * Subsequent plays use the browser's cached AudioBuffers.
+     */
+    await preloadAltoSamples();
+
     stopScheduledAudio();
 
     const secPerBeat =
@@ -1049,6 +1299,14 @@ function loadTutorialPlayer(notes) {
     }
 
     highlightEvent(0);
+
+    /*
+     * If the browser has already created an AudioContext,
+     * begin warming the sample cache as soon as a tutorial loads.
+     */
+    if (audioContext) {
+        preloadAltoSamples();
+    }
 }
 
 
