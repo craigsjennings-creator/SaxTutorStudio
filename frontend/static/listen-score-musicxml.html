@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YourMusicTutorial - MusicXML Coaching Scorecard</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #111318;
+            color: white;
+        }
+
+        .container {
+            width: min(1280px, 96%);
+            margin: 0 auto;
+            padding: 42px 0;
+        }
+
+        h1 { margin: 0 0 8px; font-size: 36px; }
+        h2 { margin-top: 0; }
+
+        .subtitle {
+            color: #9da6b5;
+            margin-bottom: 28px;
+        }
+
+        .card {
+            background: #1b1e25;
+            border: 1px solid #30343d;
+            border-radius: 16px;
+            padding: 26px;
+            margin-bottom: 22px;
+        }
+
+        .file-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            align-items: center;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            padding: 11px;
+            background: #15181e;
+            border: 1px solid #444b57;
+            border-radius: 8px;
+            color: white;
+        }
+
+        button {
+            padding: 11px 16px;
+            border-radius: 8px;
+            border: 1px solid #4f7cff;
+            background: #4f7cff;
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover { background: #638cff; }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: wait;
+        }
+
+        .loaded {
+            display: none;
+        }
+
+        .phrase-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .phrase-row {
+            display: grid;
+            grid-template-columns: 40px 78px 92px minmax(160px, 1fr) minmax(170px, 1fr) minmax(170px, 1fr);
+            gap: 10px;
+            align-items: center;
+            padding: 12px;
+            background: #15181e;
+            border-radius: 10px;
+        }
+
+        .num {
+            color: #8590a3;
+            font-weight: bold;
+        }
+
+        .expected-note {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .meta {
+            font-family: monospace;
+            color: #aab2c0;
+            font-size: 13px;
+        }
+
+        .control-label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #8f98a8;
+        }
+
+        .slider-control {
+            display: grid;
+            grid-template-columns: 1fr 76px;
+            gap: 8px;
+            align-items: center;
+        }
+
+        input[type="range"] { width: 100%; }
+
+        select,
+        input[type="number"] {
+            width: 100%;
+            padding: 9px 11px;
+            border-radius: 8px;
+            border: 1px solid #444b57;
+            background: #20242b;
+            color: white;
+            font-size: 14px;
+        }
+
+        .analyse-button {
+            width: 100%;
+            margin-top: 18px;
+            padding: 13px;
+            font-size: 16px;
+        }
+
+        .summary {
+            display: none;
+        }
+
+        .overall-banner {
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            gap: 22px;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 14px;
+            background: #15181e;
+        }
+
+        .overall-score {
+            font-size: 68px;
+            font-weight: 900;
+        }
+
+        .overall-copy {
+            font-size: 18px;
+            line-height: 1.5;
+            color: #d7dce5;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+        }
+
+        .summary-box {
+            background: #15181e;
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        .summary-label {
+            color: #8f98a8;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .summary-value {
+            font-size: 34px;
+            font-weight: 800;
+        }
+
+        .good { color: #73df9a; }
+        .warn { color: #ffd36d; }
+        .bad  { color: #ff7f87; }
+
+        .coaching {
+            margin-top: 18px;
+            padding: 18px;
+            border-radius: 12px;
+            background: #15181e;
+            line-height: 1.7;
+        }
+
+        .practice-loop-card {
+            margin-top: 18px;
+            padding: 18px;
+            border-radius: 12px;
+            background: #15181e;
+            border: 1px solid #30343d;
+        }
+
+        .practice-loop-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .practice-loop-title {
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .practice-loop-badge {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #20242b;
+            color: #ffd36d;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .practice-loop-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .practice-loop-stat {
+            background: #111318;
+            border-radius: 10px;
+            padding: 13px;
+        }
+
+        .practice-loop-stat-label {
+            color: #8f98a8;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .practice-loop-stat-value {
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .practice-loop-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+
+        .practice-loop-actions button {
+            width: auto;
+            margin-top: 0;
+        }
+
+        .practice-loop-actions .secondary {
+            background: #20242b;
+            border-color: #444b57;
+        }
+
+        .practice-timeline-wrap {
+            margin-top: 18px;
+            border: 1px solid #30343d;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #111722;
+        }
+
+        .practice-timeline-header {
+            padding: 12px 14px;
+            background: #15181e;
+            color: #aab2c0;
+            font-size: 13px;
+            border-bottom: 1px solid #30343d;
+        }
+
+        .practice-timeline-viewport {
+            position: relative;
+            height: 180px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .practice-timeline-viewport.dragging {
+            cursor: grabbing;
+        }
+
+        .practice-timeline-track {
+            position: relative;
+            height: 100%;
+            min-width: 100%;
+        }
+
+        .practice-playhead {
+            position: sticky;
+            left: 50%;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: white;
+            box-shadow: 0 0 8px rgba(255,255,255,0.7);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .practice-note {
+            position: absolute;
+            top: 18px;
+            transform: translateX(-50%);
+            font-size: 20px;
+            font-weight: 800;
+            color: white;
+            white-space: nowrap;
+        }
+
+        .practice-bar {
+            position: absolute;
+            top: 72px;
+            height: 54px;
+            border-radius: 9px;
+            background: #4f7cff;
+            min-width: 8px;
+        }
+
+        .practice-bar.loop-range {
+            box-shadow:
+                0 0 0 3px rgba(255,255,255,0.8),
+                0 0 16px rgba(79,124,255,0.8);
+            background: #6e91ff;
+        }
+
+        .practice-loop-shade {
+            position: absolute;
+            top: 64px;
+            height: 70px;
+            border-radius: 10px;
+            background: rgba(79,124,255,0.12);
+            border: 1px solid rgba(79,124,255,0.45);
+            pointer-events: none;
+        }
+
+        @media (max-width: 700px) {
+            .practice-loop-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .practice-loop-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+
+        .results-wrap {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            min-width: 1080px;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 9px;
+            border-bottom: 1px solid #30343d;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            color: #99a3b4;
+            font-size: 13px;
+        }
+
+        .note-pill {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 7px;
+            background: #20242b;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        tr.practice-loop-row {
+            background: rgba(79, 124, 255, 0.10);
+        }
+
+        tr.practice-loop-row td:first-child {
+            box-shadow: inset 4px 0 0 #4f7cff;
+        }
+
+        .status {
+            margin-top: 14px;
+            min-height: 20px;
+            color: #9da6b5;
+        }
+
+        @media (max-width: 1000px) {
+            .phrase-row {
+                grid-template-columns: 36px 70px 80px 1fr 1fr;
+            }
+
+            .duration-cell {
+                grid-column: 4 / span 2;
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 650px) {
+            .file-row,
+            .overall-banner,
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .phrase-row {
+                grid-template-columns: 34px 65px 1fr;
+            }
+
+            .meta-cell,
+            .timing-cell,
+            .duration-cell {
+                grid-column: 3;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎷 Score a MusicXML Tutorial</h1>
+    <div class="subtitle">
+        Load your own MusicXML file and score a simulated performance against its real notes, rests and durations.
+    </div>
+
+    <div class="card">
+        <h2>1. Load MusicXML</h2>
+
+        <div class="file-row">
+            <input
+                type="file"
+                id="musicxml-file"
+                accept=".musicxml,.xml"
+            >
+
+            <button id="load-file">
+                Load Tutorial
+            </button>
+        </div>
+
+        <div class="status" id="load-status">
+            Choose samples/first_five_notes.musicxml to test the tutorial we made.
+        </div>
+    </div>
+
+    <div class="card loaded" id="performance-card">
+        <h2>2. Simulate a performance</h2>
+        <div class="phrase-grid" id="phrase-grid"></div>
+
+        <button
+            class="analyse-button"
+            id="analyse-performance"
+        >
+            Analyse Full Performance
+        </button>
+
+        <div class="status" id="analysis-status">
+            Leave everything unchanged for a near-perfect run, or introduce mistakes.
+        </div>
+    </div>
+
+    <div class="card summary" id="summary">
+        <h2>3. Coaching scorecard</h2>
+
+        <div class="overall-banner">
+            <div class="overall-score" id="overall-score">--</div>
+            <div class="overall-copy" id="overall-copy">--</div>
+        </div>
+
+        <div class="summary-grid">
+            <div class="summary-box">
+                <div class="summary-label">Note accuracy</div>
+                <div class="summary-value" id="note-score">--</div>
+            </div>
+
+            <div class="summary-box">
+                <div class="summary-label">Tuning (correct notes only)</div>
+                <div class="summary-value" id="tuning-score">--</div>
+            </div>
+
+            <div class="summary-box">
+                <div class="summary-label">Timing</div>
+                <div class="summary-value" id="timing-score">--</div>
+            </div>
+
+            <div class="summary-box">
+                <div class="summary-label">Duration</div>
+                <div class="summary-value" id="duration-score">--</div>
+            </div>
+        </div>
+
+        <div class="coaching" id="coaching"></div>
+
+        <div class="practice-loop-card" id="practice-loop-card">
+            <div class="practice-loop-header">
+                <div class="practice-loop-title">
+                    🎯 Recommended Practice Loop
+                </div>
+
+                <div class="practice-loop-badge" id="practice-loop-badge">
+                    Waiting for analysis
+                </div>
+            </div>
+
+            <div id="practice-loop-message">
+                Analyse the performance and I’ll pick the weakest useful section rather than simply telling you to practise the whole song.
+            </div>
+
+            <div class="practice-loop-grid">
+                <div class="practice-loop-stat">
+                    <div class="practice-loop-stat-label">Start note</div>
+                    <div class="practice-loop-stat-value" id="loop-start-note">--</div>
+                </div>
+
+                <div class="practice-loop-stat">
+                    <div class="practice-loop-stat-label">End note</div>
+                    <div class="practice-loop-stat-value" id="loop-end-note">--</div>
+                </div>
+
+                <div class="practice-loop-stat">
+                    <div class="practice-loop-stat-label">Suggested speed</div>
+                    <div class="practice-loop-stat-value" id="loop-speed">--</div>
+                </div>
+
+                <div class="practice-loop-stat">
+                    <div class="practice-loop-stat-label">Main issue</div>
+                    <div class="practice-loop-stat-value" id="loop-issue">--</div>
+                </div>
+            </div>
+
+            <div class="practice-timeline-wrap">
+                <div class="practice-timeline-header">
+                    Recommended loop on the tutorial timeline
+                </div>
+
+                <div
+                    class="practice-timeline-viewport"
+                    id="practice-timeline-viewport"
+                >
+                    <div
+                        class="practice-timeline-track"
+                        id="practice-timeline-track"
+                    ></div>
+
+                    <div class="practice-playhead"></div>
+                </div>
+            </div>
+
+            <div class="practice-loop-actions">
+                <button id="apply-loop">
+                    Use This Loop
+                </button>
+
+                <button
+                    id="clear-loop"
+                    class="secondary"
+                >
+                    Clear Highlight
+                </button>
+            </div>
+        </div>
+
+        <div class="results-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Expected</th>
+                        <th>Detected</th>
+                        <th>Note</th>
+                        <th>Tuning</th>
+                        <th>Timing</th>
+                        <th>Hold</th>
+                        <th>Weakness</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/listen_score_musicxml.js?v=3"></script>
+</body>
+</html>
