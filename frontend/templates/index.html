@@ -426,6 +426,26 @@
     top: 17px;
 }
 
+/* Count-in */
+
+.count-in-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    pointer-events: none;
+    font-size: 96px;
+    font-weight: 800;
+    background: rgba(17, 23, 34, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.count-in-overlay.visible {
+    display: flex;
+}
+
 /* Fixed playback position */
 
 .timeline-playhead {
@@ -553,6 +573,9 @@
 
     <!-- Finger lanes -->
     <div class="finger-timeline" id="finger-timeline"></div>
+
+    <!-- Count-in overlay -->
+    <div class="count-in-overlay" id="count-in-overlay"></div>
 
     <!-- Playback line -->
     <div class="timeline-playhead"></div>
@@ -1097,11 +1120,12 @@ window.startTimelineMovement = startTimelineMovement;
 window.pauseTimelineMovement = pauseTimelineMovement;
 window.resetTimelineMovement = resetTimelineMovement;
 window.seekTimelineToBeat = seekTimelineToBeat;
+window.setTimelineBeatPosition = setTimelineBeatPosition;
 
 
 
 </script>
 <script src="/static/js/fingering.js?v=5"></script>
-<script src="/static/js/player.js?v=5"></script>
+<script src="/static/js/player.js?v=6"></script>
 </body>
 </html>
