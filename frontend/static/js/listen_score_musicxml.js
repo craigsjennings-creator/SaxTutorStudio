@@ -37,11 +37,32 @@ let loadedPhrase = [];
 let currentResults = [];
 let recommendedLoop = null;
 
+let loadedMusicXMLText = "";
+let loadedMusicXMLName = "tutorial.musicxml";
+
+let activeCoachLoop = null;
+let attemptHistory = [];
+
+let loopUndoStack = [];
+
+
 const PRACTICE_PIXELS_PER_SECOND = 160;
 
 let practiceTimelineDragging = false;
 let practiceTimelineDragStartX = 0;
 let practiceTimelineScrollStart = 0;
+
+let scorecardLoopDrawActive = false;
+let scorecardLoopDrawStartIndex = null;
+let scorecardLoopDrawCurrentIndex = null;
+let scorecardLoopPointerX = 0;
+let scorecardLoopPointerY = 0;
+let scorecardLoopAutoScrollDirection = 0;
+let scorecardLoopAutoScrollFrame = null;
+let scorecardLoopAutoScrollLastTime = 0;
+
+const SCORECARD_LOOP_EDGE_ZONE = 80;
+const SCORECARD_LOOP_SCROLL_PX_PER_SECOND = 380;
 
 
 function ensureAudioContext() {
@@ -388,6 +409,1063 @@ function normaliseToSampleName(
 }
 
 
+
+function beatRangeToPlayableIndexes(
+    startBeat,
+    endBeat
+) {
+
+    if (!loadedPhrase.length) {
+        return null;
+    }
+
+    let startIndex = 0;
+    let endIndex =
+        loadedPhrase.length - 1;
+
+    let bestStart = Infinity;
+    let bestEnd = Infinity;
+
+    loadedPhrase.forEach(
+        (note, index) => {
+
+            const startDistance =
+                Math.abs(
+                    note.startBeats -
+                    startBeat
+                );
+
+            const endDistance =
+                Math.abs(
+                    (
+                        note.startBeats +
+                        note.durationBeats
+                    ) -
+                    endBeat
+                );
+
+            if (startDistance < bestStart) {
+                bestStart =
+                    startDistance;
+                startIndex =
+                    index;
+            }
+
+            if (endDistance < bestEnd) {
+                bestEnd =
+                    endDistance;
+                endIndex =
+                    index;
+            }
+        }
+    );
+
+    if (endIndex < startIndex) {
+        [startIndex, endIndex] =
+            [endIndex, startIndex];
+    }
+
+    return {
+        startIndex,
+        endIndex
+    };
+}
+
+
+function applyActiveCoachLoopToUI() {
+
+    if (!activeCoachLoop) {
+        return;
+    }
+
+    document
+        .querySelectorAll(
+            ".phrase-row"
+        )
+        .forEach(
+            (row, index) => {
+
+                const inside =
+                    index >=
+                        activeCoachLoop.startIndex &&
+                    index <=
+                        activeCoachLoop.endIndex;
+
+                row.style.display =
+                    inside
+                        ? ""
+                        : "none";
+            }
+        );
+}
+
+
+function currentScoredPhrase() {
+
+    if (!activeCoachLoop) {
+        return loadedPhrase.map(
+            (note, index) => ({
+                note,
+                originalIndex:
+                    index
+            })
+        );
+    }
+
+    return loadedPhrase
+        .map(
+            (note, index) => ({
+                note,
+                originalIndex:
+                    index
+            })
+        )
+        .filter(
+            item =>
+                item.originalIndex >=
+                    activeCoachLoop.startIndex &&
+                item.originalIndex <=
+                    activeCoachLoop.endIndex
+        );
+}
+
+
+function saveCoachingState() {
+
+    if (activeCoachLoop) {
+        localStorage.setItem(
+            "ymtCoachActiveLoop",
+            JSON.stringify(
+                activeCoachLoop
+            )
+        );
+    }
+
+    localStorage.setItem(
+        "ymtCoachAttemptHistory",
+        JSON.stringify(
+            attemptHistory
+        )
+    );
+}
+
+
+
+function loopKey(loop) {
+
+    if (!loop) {
+        return "whole-song";
+    }
+
+    return `${loop.startIndex}:${loop.endIndex}`;
+}
+
+
+function loopRelationship(
+    previousLoop,
+    currentLoop
+) {
+
+    if (
+        !previousLoop &&
+        !currentLoop
+    ) {
+        return {
+            type: "same",
+            addedBefore: 0,
+            addedAfter: 0,
+            removedBefore: 0,
+            removedAfter: 0
+        };
+    }
+
+    if (
+        !previousLoop &&
+        currentLoop
+    ) {
+        return {
+            type: "focused",
+            addedBefore: 0,
+            addedAfter: 0,
+            removedBefore: 0,
+            removedAfter: 0
+        };
+    }
+
+    if (
+        previousLoop &&
+        !currentLoop
+    ) {
+        return {
+            type: "whole-song",
+            addedBefore: 0,
+            addedAfter: 0,
+            removedBefore: 0,
+            removedAfter: 0
+        };
+    }
+
+    const same =
+        previousLoop.startIndex ===
+            currentLoop.startIndex &&
+        previousLoop.endIndex ===
+            currentLoop.endIndex;
+
+    if (same) {
+        return {
+            type: "same",
+            addedBefore: 0,
+            addedAfter: 0,
+            removedBefore: 0,
+            removedAfter: 0
+        };
+    }
+
+    const containsPrevious =
+        currentLoop.startIndex <=
+            previousLoop.startIndex &&
+        currentLoop.endIndex >=
+            previousLoop.endIndex;
+
+    if (containsPrevious) {
+
+        return {
+            type: "expanded",
+
+            addedBefore:
+                previousLoop.startIndex -
+                currentLoop.startIndex,
+
+            addedAfter:
+                currentLoop.endIndex -
+                previousLoop.endIndex,
+
+            removedBefore: 0,
+            removedAfter: 0
+        };
+    }
+
+    const insidePrevious =
+        currentLoop.startIndex >=
+            previousLoop.startIndex &&
+        currentLoop.endIndex <=
+            previousLoop.endIndex;
+
+    if (insidePrevious) {
+
+        return {
+            type: "shrunk",
+
+            addedBefore: 0,
+            addedAfter: 0,
+
+            removedBefore:
+                currentLoop.startIndex -
+                previousLoop.startIndex,
+
+            removedAfter:
+                previousLoop.endIndex -
+                currentLoop.endIndex
+        };
+    }
+
+    const overlaps =
+        Math.max(
+            previousLoop.startIndex,
+            currentLoop.startIndex
+        ) <=
+        Math.min(
+            previousLoop.endIndex,
+            currentLoop.endIndex
+        );
+
+    return {
+        type:
+            overlaps
+                ? "shifted"
+                : "different",
+        addedBefore: 0,
+        addedAfter: 0,
+        removedBefore: 0,
+        removedAfter: 0
+    };
+}
+
+
+function summaryFromPerNote(
+    perNote
+) {
+
+    if (!perNote.length) {
+        return null;
+    }
+
+    const correct =
+        perNote.filter(
+            item =>
+                item.correct
+        );
+
+    const noteAccuracy =
+        Math.round(
+            correct.length /
+            perNote.length *
+            100
+        );
+
+    const tuning =
+        correct.length
+            ? Math.round(
+                correct.reduce(
+                    (sum, item) =>
+                        sum +
+                        (
+                            item.tuningScore ??
+                            0
+                        ),
+                    0
+                ) /
+                correct.length
+            )
+            : 0;
+
+    const timing =
+        Math.round(
+            perNote.reduce(
+                (sum, item) =>
+                    sum +
+                    item.timingScore,
+                0
+            ) /
+                perNote.length
+        );
+
+    const duration =
+        Math.round(
+            perNote.reduce(
+                (sum, item) =>
+                    sum +
+                    item.durationScore,
+                0
+            ) /
+                perNote.length
+        );
+
+    const overall =
+        Math.round(
+            noteAccuracy * 0.50 +
+            tuning * 0.15 +
+            timing * 0.20 +
+            duration * 0.15
+        );
+
+    return {
+        overall,
+        noteAccuracy,
+        tuning,
+        timing,
+        duration
+    };
+}
+
+
+function overlappingIndexes(
+    firstLoop,
+    secondLoop
+) {
+
+    if (
+        !firstLoop ||
+        !secondLoop
+    ) {
+        return null;
+    }
+
+    const start =
+        Math.max(
+            firstLoop.startIndex,
+            secondLoop.startIndex
+        );
+
+    const end =
+        Math.min(
+            firstLoop.endIndex,
+            secondLoop.endIndex
+        );
+
+    if (start > end) {
+        return [];
+    }
+
+    const indexes = [];
+
+    for (
+        let index = start;
+        index <= end;
+        index++
+    ) {
+        indexes.push(index);
+    }
+
+    return indexes;
+}
+
+
+function filterAttemptToIndexes(
+    attempt,
+    indexes
+) {
+
+    if (!attempt?.perNote) {
+        return [];
+    }
+
+    if (indexes === null) {
+        return attempt.perNote;
+    }
+
+    const wanted =
+        new Set(indexes);
+
+    return attempt.perNote.filter(
+        item =>
+            wanted.has(
+                item.index
+            )
+    );
+}
+
+
+function deltaText(
+    current,
+    previous
+) {
+
+    const delta =
+        current -
+        previous;
+
+    return {
+        delta,
+        text:
+            `${previous}% → ${current}% (${
+                delta > 0
+                    ? "+"
+                    : ""
+            }${delta})`,
+        className:
+            delta > 0
+                ? "delta-positive"
+                : delta < 0
+                    ? "delta-negative"
+                    : "delta-neutral"
+    };
+}
+
+
+function renderAttemptComparison() {
+
+    const banner =
+        document.getElementById(
+            "attempt-comparison-banner"
+        );
+
+    const note =
+        document.getElementById(
+            "attempt-comparison-note"
+        );
+
+    if (
+        !banner ||
+        attemptHistory.length < 2
+    ) {
+        return;
+    }
+
+    const current =
+        attemptHistory[
+            attemptHistory.length - 1
+        ];
+
+    const previous =
+        attemptHistory[
+            attemptHistory.length - 2
+        ];
+
+    const relationship =
+        loopRelationship(
+            previous.loop,
+            current.loop
+        );
+
+    let previousSummary = {
+        overall:
+            previous.overall,
+        noteAccuracy:
+            previous.noteAccuracy,
+        tuning:
+            previous.tuning,
+        timing:
+            previous.timing,
+        duration:
+            previous.duration
+    };
+
+    let currentSummary = {
+        overall:
+            current.overall,
+        noteAccuracy:
+            current.noteAccuracy,
+        tuning:
+            current.tuning,
+        timing:
+            current.timing,
+        duration:
+            current.duration
+    };
+
+    let explanation = "";
+
+    if (
+        relationship.type ===
+        "same"
+    ) {
+
+        explanation =
+            "Same practice loop, so this is a direct attempt-to-attempt comparison.";
+
+    } else if (
+        relationship.type ===
+        "expanded"
+    ) {
+
+        const overlap =
+            overlappingIndexes(
+                previous.loop,
+                current.loop
+            );
+
+        const previousOverlap =
+            summaryFromPerNote(
+                filterAttemptToIndexes(
+                    previous,
+                    overlap
+                )
+            );
+
+        const currentOverlap =
+            summaryFromPerNote(
+                filterAttemptToIndexes(
+                    current,
+                    overlap
+                )
+            );
+
+        if (
+            previousOverlap &&
+            currentOverlap
+        ) {
+            previousSummary =
+                previousOverlap;
+
+            currentSummary =
+                currentOverlap;
+        }
+
+        const added =
+            relationship.addedBefore +
+            relationship.addedAfter;
+
+        explanation =
+            `You expanded the loop by ${added} note${
+                added === 1 ? "" : "s"
+            }`;
+
+        if (
+            relationship.addedBefore &&
+            relationship.addedAfter
+        ) {
+            explanation +=
+                ` (${relationship.addedBefore} before and ${relationship.addedAfter} after).`;
+        } else if (
+            relationship.addedBefore
+        ) {
+            explanation +=
+                ` before the previous section.`;
+        } else {
+            explanation +=
+                ` after the previous section.`;
+        }
+
+        explanation +=
+            " The comparison below measures only the notes shared by both loops, so a harder expanded loop is not unfairly treated as regression.";
+
+        const addedIndexes = [];
+
+        if (current.loop) {
+
+            for (
+                let index =
+                    current.loop.startIndex;
+                index <=
+                    current.loop.endIndex;
+                index++
+            ) {
+
+                if (
+                    !overlap.includes(
+                        index
+                    )
+                ) {
+                    addedIndexes.push(
+                        index
+                    );
+                }
+            }
+        }
+
+        const addedSummary =
+            summaryFromPerNote(
+                filterAttemptToIndexes(
+                    current,
+                    addedIndexes
+                )
+            );
+
+        if (addedSummary) {
+            explanation +=
+                ` The newly added notes scored ${addedSummary.overall}% overall.`;
+        }
+
+    } else if (
+        relationship.type ===
+        "shrunk"
+    ) {
+
+        explanation =
+            "You made the practice loop smaller. This comparison uses the latest scores as shown, but it is a different-sized challenge.";
+
+    } else if (
+        relationship.type ===
+        "shifted"
+    ) {
+
+        explanation =
+            "You shifted the practice range. The loops overlap, but this is not a like-for-like attempt.";
+
+    } else if (
+        relationship.type ===
+        "focused"
+    ) {
+
+        explanation =
+            "You moved from whole-song scoring into a focused practice loop. This begins a more targeted coaching phase.";
+
+    } else {
+
+        explanation =
+            "This is a different practice section, so it starts a new comparison context.";
+    }
+
+    const overallDelta =
+        deltaText(
+            currentSummary.overall,
+            previousSummary.overall
+        );
+
+    const noteDelta =
+        deltaText(
+            currentSummary.noteAccuracy,
+            previousSummary.noteAccuracy
+        );
+
+    const tuningDelta =
+        deltaText(
+            currentSummary.tuning,
+            previousSummary.tuning
+        );
+
+    const timingDelta =
+        deltaText(
+            currentSummary.timing,
+            previousSummary.timing
+        );
+
+    const durationDelta =
+        deltaText(
+            currentSummary.duration,
+            previousSummary.duration
+        );
+
+    const metrics = [
+        ["compare-overall", overallDelta],
+        ["compare-notes", noteDelta],
+        ["compare-tuning", tuningDelta],
+        ["compare-timing", timingDelta],
+        ["compare-duration", durationDelta]
+    ];
+
+    metrics.forEach(
+        ([id, data]) => {
+
+            const element =
+                document.getElementById(
+                    id
+                );
+
+            if (element) {
+                element.textContent =
+                    data.text;
+
+                element.className =
+                    `attempt-comparison-value ${data.className}`;
+            }
+        }
+    );
+
+    let coaching = "";
+
+    if (
+        relationship.type ===
+        "same" ||
+        relationship.type ===
+        "expanded"
+    ) {
+
+        const deltas = [
+            ["note accuracy", noteDelta.delta],
+            ["tuning", tuningDelta.delta],
+            ["timing", timingDelta.delta],
+            ["duration", durationDelta.delta]
+        ];
+
+        const best =
+            [...deltas].sort(
+                (a, b) =>
+                    b[1] - a[1]
+            )[0];
+
+        const worst =
+            [...deltas].sort(
+                (a, b) =>
+                    a[1] - b[1]
+            )[0];
+
+        if (
+            overallDelta.delta > 0
+        ) {
+            coaching +=
+                `You improved by ${overallDelta.delta} points on the comparable section. `;
+        } else if (
+            overallDelta.delta < 0
+        ) {
+            coaching +=
+                `The comparable section dipped by ${Math.abs(
+                    overallDelta.delta
+                )} points this attempt. `;
+        } else {
+            coaching +=
+                "The comparable section held the same overall score. ";
+        }
+
+        if (best[1] > 0) {
+            coaching +=
+                `Biggest improvement: ${best[0]} (+${best[1]}). `;
+        }
+
+        if (worst[1] < -3) {
+            coaching +=
+                `Watch ${worst[0]}, which fell by ${Math.abs(
+                    worst[1]
+                )} points.`;
+        }
+    }
+
+    banner.textContent =
+        explanation;
+
+    note.textContent =
+        coaching;
+}
+
+
+function renderProgress() {
+
+    const history =
+        document.getElementById(
+            "progress-history"
+        );
+
+    if (!history) {
+        return;
+    }
+
+    history.innerHTML = "";
+
+    attemptHistory.forEach(
+        (attempt, index) => {
+
+            const pill =
+                document.createElement(
+                    "div"
+                );
+
+            pill.className =
+                "attempt-pill";
+
+            pill.textContent =
+                `Attempt ${index + 1}: ${attempt.overall}%`;
+
+            history.appendChild(
+                pill
+            );
+        }
+    );
+
+    const latest =
+        attemptHistory[
+            attemptHistory.length - 1
+        ];
+
+    const message =
+        document.getElementById(
+            "progress-message"
+        );
+
+    const actions =
+        document.getElementById(
+            "expand-actions"
+        );
+
+    if (!latest) {
+        actions?.classList.remove(
+            "show"
+        );
+        return;
+    }
+
+    if (latest.overall >= 85) {
+
+        message.textContent =
+            "Great improvement. This loop is strong enough to expand.";
+
+        actions?.classList.add(
+            "show"
+        );
+
+    } else {
+
+        message.textContent =
+            `Current loop score: ${latest.overall}%. Keep practising this section before expanding it.`;
+
+        actions?.classList.remove(
+            "show"
+        );
+    }
+}
+
+
+function expandActiveLoop(
+    before,
+    after
+) {
+
+    if (!activeCoachLoop) {
+        return;
+    }
+
+    pushLoopUndoState();
+
+    activeCoachLoop.startIndex =
+        Math.max(
+            0,
+            activeCoachLoop.startIndex -
+            before
+        );
+
+    activeCoachLoop.endIndex =
+        Math.min(
+            loadedPhrase.length - 1,
+            activeCoachLoop.endIndex +
+            after
+        );
+
+    applyActiveCoachLoopToUI();
+
+    const start =
+        loadedPhrase[
+            activeCoachLoop.startIndex
+        ];
+
+    const end =
+        loadedPhrase[
+            activeCoachLoop.endIndex
+        ];
+
+    recommendedLoop = {
+        startIndex:
+            activeCoachLoop.startIndex,
+        endIndex:
+            activeCoachLoop.endIndex,
+        startNote:
+            start.pitch,
+        endNote:
+            end.pitch,
+        issue:
+            "Expanded practice",
+        speed:
+            "75%",
+        severity:
+            20
+    };
+
+    updatePracticeLoopRecommendation(
+        currentResults.length
+            ? currentResults
+            : []
+    );
+
+    document.getElementById(
+        "practice-loop-message"
+    ).textContent =
+        `Expanded practice loop: notes ${activeCoachLoop.startIndex + 1}–${activeCoachLoop.endIndex + 1}. Score this larger section when ready.`;
+
+    saveCoachingState();
+    renderProgress();
+}
+
+
+async function restoreCoachingFromTutorial() {
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    if (
+        params.get(
+            "fromTutorial"
+        ) !== "1"
+    ) {
+        return;
+    }
+
+    const xml =
+        localStorage.getItem(
+            "ymtCurrentMusicXML"
+        );
+
+    if (!xml) {
+        return;
+    }
+
+    loadedMusicXMLText =
+        xml;
+
+    loadedMusicXMLName =
+        localStorage.getItem(
+            "ymtCurrentMusicXMLName"
+        ) ||
+        "tutorial.musicxml";
+
+    const parsed =
+        parseMusicXML(
+            xml
+        );
+
+    loadedPhrase =
+        parsed.playable;
+
+    buildPerformanceUI();
+
+    document.getElementById(
+        "performance-card"
+    ).style.display =
+        "block";
+
+    const loopActive =
+        localStorage.getItem(
+            "ymtCoachLoopActive"
+        ) === "1";
+
+    if (loopActive) {
+
+        const startBeat =
+            parseFloat(
+                localStorage.getItem(
+                    "ymtCoachLoopStartBeat"
+                )
+            );
+
+        const endBeat =
+            parseFloat(
+                localStorage.getItem(
+                    "ymtCoachLoopEndBeat"
+                )
+            );
+
+        const indexes =
+            beatRangeToPlayableIndexes(
+                startBeat,
+                endBeat
+            );
+
+        if (indexes) {
+            activeCoachLoop =
+                indexes;
+        }
+
+    } else {
+
+        const storedLoop =
+            localStorage.getItem(
+                "ymtCoachActiveLoop"
+            );
+
+        if (storedLoop) {
+            try {
+                activeCoachLoop =
+                    JSON.parse(
+                        storedLoop
+                    );
+            } catch (error) {
+                activeCoachLoop =
+                    null;
+            }
+        }
+    }
+
+    try {
+        attemptHistory =
+            JSON.parse(
+                localStorage.getItem(
+                    "ymtCoachAttemptHistory"
+                ) ||
+                "[]"
+            );
+    } catch (error) {
+    }
+
+    applyActiveCoachLoopToUI();
+    renderPracticeTimeline();
+    renderProgress();
+    renderAttemptComparison();
+
+    document.getElementById(
+        "load-status"
+    ).textContent =
+        activeCoachLoop
+            ? `Loaded ${loadedMusicXMLName}. Coaching is focused on notes ${activeCoachLoop.startIndex + 1}–${activeCoachLoop.endIndex + 1}.`
+            : `Loaded ${loadedMusicXMLName} automatically from the tutorial.`;
+
+    window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname
+    );
+}
+
+
 async function loadChosenFile() {
 
     const input =
@@ -416,6 +1494,13 @@ async function loadChosenFile() {
 
         const text =
             await file.text();
+
+        loadedMusicXMLText =
+            text;
+
+        loadedMusicXMLName =
+            file.name ||
+            "tutorial.musicxml";
 
         const parsed =
             parseMusicXML(
@@ -1602,26 +2687,34 @@ async function analysePerformance() {
 
     try {
 
+        const phraseToScore =
+            currentScoredPhrase();
+
         for (
-            let index = 0;
-            index < loadedPhrase.length;
-            index++
+            let localIndex = 0;
+            localIndex < phraseToScore.length;
+            localIndex++
         ) {
 
+            const originalIndex =
+                phraseToScore[
+                    localIndex
+                ].originalIndex;
+
             const expected =
-                loadedPhrase[
-                    index
-                ];
+                phraseToScore[
+                    localIndex
+                ].note;
 
             const playedNote =
                 played[
-                    index
+                    originalIndex
                 ].value;
 
             const timingError =
                 parseFloat(
                     timingInputs[
-                        index
+                        originalIndex
                     ].value
                 ) || 0;
 
@@ -1630,14 +2723,14 @@ async function analysePerformance() {
                     0.05,
                     parseFloat(
                         durationInputs[
-                            index
+                            originalIndex
                         ].value
                     ) ||
                     expected.duration
                 );
 
             status.textContent =
-                `Analysing ${index + 1}/${loadedPhrase.length}: ${playedNote}.wav`;
+                `Analysing ${localIndex + 1}/${phraseToScore.length}: ${playedNote}.wav`;
 
             const buffer =
                 await loadSample(
@@ -1657,7 +2750,8 @@ async function analysePerformance() {
                 );
 
             results.push({
-                index,
+                index:
+                    originalIndex,
                 expected,
                 timingError,
                 heldDuration,
@@ -1680,6 +2774,51 @@ async function analysePerformance() {
         renderResults(
             results
         );
+
+        const summary =
+            calculateSummary(
+                results
+            );
+
+        attemptHistory.push({
+            overall:
+                summary.overall,
+            noteAccuracy:
+                summary.noteAccuracy,
+            tuning:
+                summary.tuning,
+            timing:
+                summary.timing,
+            duration:
+                summary.duration,
+
+            loop:
+                activeCoachLoop
+                    ? {
+                        ...activeCoachLoop
+                    }
+                    : null,
+
+            perNote:
+                results.map(
+                    result => ({
+                        index:
+                            result.index,
+                        correct:
+                            result.correct,
+                        tuningScore:
+                            result.tuningScore,
+                        timingScore:
+                            result.timing.score,
+                        durationScore:
+                            result.duration.score
+                    })
+                )
+        });
+
+        saveCoachingState();
+        renderProgress();
+        renderAttemptComparison();
 
         status.textContent =
             "Performance analysis complete.";
@@ -1916,6 +3055,9 @@ function renderPracticeTimeline() {
             label.className =
                 "practice-note";
 
+            label.dataset.noteIndex =
+                String(index);
+
             label.textContent =
                 note.pitch;
 
@@ -2098,6 +3240,674 @@ function highlightRecommendedLoopOnTimeline() {
 }
 
 
+
+function scorecardSelectableIndexFromPoint(
+    clientX,
+    clientY
+) {
+
+    const element =
+        document.elementFromPoint(
+            clientX,
+            clientY
+        );
+
+    const selectable =
+        element?.closest(
+            ".practice-note[data-note-index], .practice-bar[data-note-index]"
+        );
+
+    if (!selectable) {
+        return null;
+    }
+
+    const index =
+        parseInt(
+            selectable.dataset.noteIndex ?? "",
+            10
+        );
+
+    return Number.isFinite(index)
+        ? index
+        : null;
+}
+
+
+function clearScorecardLoopPreview() {
+
+    document
+        .querySelectorAll(
+            ".practice-bar.loop-preview"
+        )
+        .forEach(
+            bar =>
+                bar.classList.remove(
+                    "loop-preview"
+                )
+        );
+
+    document
+        .querySelectorAll(
+            ".practice-loop-shade.loop-preview"
+        )
+        .forEach(
+            shade =>
+                shade.remove()
+        );
+}
+
+
+function previewScorecardLoopRange(
+    startIndex,
+    endIndex
+) {
+
+    clearScorecardLoopPreview();
+
+    if (
+        startIndex === null ||
+        endIndex === null
+    ) {
+        return;
+    }
+
+    const minIndex =
+        Math.min(
+            startIndex,
+            endIndex
+        );
+
+    const maxIndex =
+        Math.max(
+            startIndex,
+            endIndex
+        );
+
+    for (
+        let index = minIndex;
+        index <= maxIndex;
+        index++
+    ) {
+        document
+            .querySelector(
+                `.practice-bar[data-note-index="${index}"]`
+            )
+            ?.classList.add(
+                "loop-preview"
+            );
+    }
+}
+
+
+function nearestScorecardNoteByX(
+    clientX
+) {
+
+    const notes =
+        Array.from(
+            document.querySelectorAll(
+                ".practice-note[data-note-index]"
+            )
+        );
+
+    if (!notes.length) {
+        return null;
+    }
+
+    let nearestIndex = null;
+    let nearestDistance = Infinity;
+
+    notes.forEach(note => {
+
+        const rect =
+            note.getBoundingClientRect();
+
+        const centre =
+            rect.left +
+            rect.width / 2;
+
+        const distance =
+            Math.abs(
+                centre -
+                clientX
+            );
+
+        if (
+            distance <
+            nearestDistance
+        ) {
+
+            const index =
+                parseInt(
+                    note.dataset.noteIndex,
+                    10
+                );
+
+            if (Number.isFinite(index)) {
+                nearestDistance =
+                    distance;
+                nearestIndex =
+                    index;
+            }
+        }
+    });
+
+    return nearestIndex;
+}
+
+
+function updateScorecardLoopDrawSelection() {
+
+    if (!scorecardLoopDrawActive) {
+        return;
+    }
+
+    let index =
+        scorecardSelectableIndexFromPoint(
+            scorecardLoopPointerX,
+            scorecardLoopPointerY
+        );
+
+    if (index === null) {
+        index =
+            nearestScorecardNoteByX(
+                scorecardLoopPointerX
+            );
+    }
+
+    if (index === null) {
+        return;
+    }
+
+    if (
+        index !==
+        scorecardLoopDrawCurrentIndex
+    ) {
+
+        scorecardLoopDrawCurrentIndex =
+            index;
+
+        previewScorecardLoopRange(
+            scorecardLoopDrawStartIndex,
+            scorecardLoopDrawCurrentIndex
+        );
+    }
+}
+
+
+function stopScorecardLoopAutoScroll() {
+
+    scorecardLoopAutoScrollDirection = 0;
+
+    if (scorecardLoopAutoScrollFrame) {
+        cancelAnimationFrame(
+            scorecardLoopAutoScrollFrame
+        );
+
+        scorecardLoopAutoScrollFrame =
+            null;
+    }
+
+    scorecardLoopAutoScrollLastTime = 0;
+}
+
+
+function runScorecardLoopAutoScroll(
+    now
+) {
+
+    if (
+        !scorecardLoopDrawActive ||
+        scorecardLoopAutoScrollDirection === 0
+    ) {
+        stopScorecardLoopAutoScroll();
+        return;
+    }
+
+    const viewport =
+        document.getElementById(
+            "practice-timeline-viewport"
+        );
+
+    if (!viewport) {
+        stopScorecardLoopAutoScroll();
+        return;
+    }
+
+    if (!scorecardLoopAutoScrollLastTime) {
+        scorecardLoopAutoScrollLastTime =
+            now;
+    }
+
+    const deltaSeconds =
+        Math.min(
+            0.05,
+            (
+                now -
+                scorecardLoopAutoScrollLastTime
+            ) /
+            1000
+        );
+
+    scorecardLoopAutoScrollLastTime =
+        now;
+
+    viewport.scrollLeft +=
+        scorecardLoopAutoScrollDirection *
+        SCORECARD_LOOP_SCROLL_PX_PER_SECOND *
+        deltaSeconds;
+
+    updateScorecardLoopDrawSelection();
+
+    scorecardLoopAutoScrollFrame =
+        requestAnimationFrame(
+            runScorecardLoopAutoScroll
+        );
+}
+
+
+function updateScorecardLoopAutoScroll() {
+
+    const viewport =
+        document.getElementById(
+            "practice-timeline-viewport"
+        );
+
+    if (
+        !viewport ||
+        !scorecardLoopDrawActive
+    ) {
+        stopScorecardLoopAutoScroll();
+        return;
+    }
+
+    const rect =
+        viewport.getBoundingClientRect();
+
+    let direction = 0;
+
+    if (
+        scorecardLoopPointerX <=
+        rect.left +
+        SCORECARD_LOOP_EDGE_ZONE
+    ) {
+        direction = -1;
+
+    } else if (
+        scorecardLoopPointerX >=
+        rect.right -
+        SCORECARD_LOOP_EDGE_ZONE
+    ) {
+        direction = 1;
+    }
+
+    if (
+        direction ===
+        scorecardLoopAutoScrollDirection
+    ) {
+        return;
+    }
+
+    stopScorecardLoopAutoScroll();
+
+    scorecardLoopAutoScrollDirection =
+        direction;
+
+    if (direction !== 0) {
+        scorecardLoopAutoScrollFrame =
+            requestAnimationFrame(
+                runScorecardLoopAutoScroll
+            );
+    }
+}
+
+
+function cloneLoopState(
+    loop
+) {
+
+    return loop
+        ? {
+            startIndex:
+                loop.startIndex,
+            endIndex:
+                loop.endIndex
+        }
+        : null;
+}
+
+
+function pushLoopUndoState() {
+
+    loopUndoStack.push({
+        activeCoachLoop:
+            cloneLoopState(
+                activeCoachLoop
+            ),
+
+        recommendedLoop:
+            recommendedLoop
+                ? {
+                    ...recommendedLoop
+                }
+                : null,
+
+        attemptHistory:
+            attemptHistory.map(
+                attempt => ({
+                    ...attempt
+                })
+            )
+    });
+
+    /*
+     * Keep a modest history rather than allowing it
+     * to grow forever.
+     */
+    if (
+        loopUndoStack.length >
+        20
+    ) {
+        loopUndoStack.shift();
+    }
+
+    updateUndoButton();
+}
+
+
+function updateUndoButton() {
+
+    const button =
+        document.getElementById(
+            "undo-loop"
+        );
+
+    if (button) {
+        button.disabled =
+            loopUndoStack.length === 0;
+    }
+}
+
+
+function undoLoopChange() {
+
+    const previous =
+        loopUndoStack.pop();
+
+    if (!previous) {
+        return;
+    }
+
+    activeCoachLoop =
+        previous.activeCoachLoop;
+
+    recommendedLoop =
+        previous.recommendedLoop;
+
+    attemptHistory =
+        previous.attemptHistory;
+
+    if (activeCoachLoop) {
+
+        const start =
+            loadedPhrase[
+                activeCoachLoop.startIndex
+            ];
+
+        const end =
+            loadedPhrase[
+                activeCoachLoop.endIndex
+            ];
+
+        document.getElementById(
+            "loop-start-note"
+        ).textContent =
+            `${activeCoachLoop.startIndex + 1}. ${start.pitch}`;
+
+        document.getElementById(
+            "loop-end-note"
+        ).textContent =
+            `${activeCoachLoop.endIndex + 1}. ${end.pitch}`;
+    }
+
+    applyActiveCoachLoopToUI();
+
+    if (recommendedLoop) {
+        highlightRecommendedLoopOnTimeline();
+    }
+
+    saveCoachingState();
+    renderProgress();
+    updateUndoButton();
+
+    document.getElementById(
+        "practice-loop-message"
+    ).textContent =
+        activeCoachLoop
+            ? `Loop restored to notes ${activeCoachLoop.startIndex + 1}–${activeCoachLoop.endIndex + 1}.`
+            : "Previous loop selection restored.";
+}
+
+
+function beginScorecardLoopDraw(
+    event,
+    noteIndex
+) {
+
+    const viewport =
+        document.getElementById(
+            "practice-timeline-viewport"
+        );
+
+    if (!viewport) {
+        return;
+    }
+
+    scorecardLoopDrawActive = true;
+
+    scorecardLoopDrawStartIndex =
+        noteIndex;
+
+    scorecardLoopDrawCurrentIndex =
+        noteIndex;
+
+    scorecardLoopPointerX =
+        event.clientX;
+
+    scorecardLoopPointerY =
+        event.clientY;
+
+    viewport.classList.add(
+        "loop-drawing"
+    );
+
+    try {
+        viewport.setPointerCapture(
+            event.pointerId
+        );
+    } catch (error) {
+        // Optional.
+    }
+
+    previewScorecardLoopRange(
+        noteIndex,
+        noteIndex
+    );
+
+    event.preventDefault();
+}
+
+
+function moveScorecardLoopDraw(
+    event
+) {
+
+    if (!scorecardLoopDrawActive) {
+        return;
+    }
+
+    scorecardLoopPointerX =
+        event.clientX;
+
+    scorecardLoopPointerY =
+        event.clientY;
+
+    updateScorecardLoopDrawSelection();
+    updateScorecardLoopAutoScroll();
+
+    event.preventDefault();
+}
+
+
+function endScorecardLoopDraw(
+    event
+) {
+
+    if (!scorecardLoopDrawActive) {
+        return;
+    }
+
+    const viewport =
+        document.getElementById(
+            "practice-timeline-viewport"
+        );
+
+    stopScorecardLoopAutoScroll();
+
+    viewport?.classList.remove(
+        "loop-drawing"
+    );
+
+    if (
+        scorecardLoopDrawStartIndex !== null &&
+        scorecardLoopDrawCurrentIndex !== null
+    ) {
+
+        let startIndex =
+            Math.min(
+                scorecardLoopDrawStartIndex,
+                scorecardLoopDrawCurrentIndex
+            );
+
+        let endIndex =
+            Math.max(
+                scorecardLoopDrawStartIndex,
+                scorecardLoopDrawCurrentIndex
+            );
+
+        /*
+         * Save the current loop first so the learner can undo
+         * an accidental expansion.
+         */
+        pushLoopUndoState();
+
+        /*
+         * Drawing on the scorecard ADDS to the current loop.
+         * Example:
+         * existing 1–3 + drag on note 4 => 1–4
+         *
+         * This makes it natural to grow a recommended loop
+         * one or several notes at a time.
+         */
+        if (activeCoachLoop) {
+
+            startIndex =
+                Math.min(
+                    startIndex,
+                    activeCoachLoop.startIndex
+                );
+
+            endIndex =
+                Math.max(
+                    endIndex,
+                    activeCoachLoop.endIndex
+                );
+        }
+
+        activeCoachLoop = {
+            startIndex,
+            endIndex
+        };
+
+        const start =
+            loadedPhrase[
+                startIndex
+            ];
+
+        const end =
+            loadedPhrase[
+                endIndex
+            ];
+
+        recommendedLoop = {
+            startIndex,
+            endIndex,
+            startNote:
+                start.pitch,
+            endNote:
+                end.pitch,
+            issue:
+                "Custom selection",
+            speed:
+                "75%",
+            severity:
+                20
+        };
+
+        document.getElementById(
+            "loop-start-note"
+        ).textContent =
+            `${startIndex + 1}. ${start.pitch}`;
+
+        document.getElementById(
+            "loop-end-note"
+        ).textContent =
+            `${endIndex + 1}. ${end.pitch}`;
+
+        document.getElementById(
+            "loop-speed"
+        ).textContent =
+            "75%";
+
+        document.getElementById(
+            "loop-issue"
+        ).textContent =
+            "Custom selection";
+
+        document.getElementById(
+            "practice-loop-badge"
+        ).textContent =
+            "Your loop";
+
+        document.getElementById(
+            "practice-loop-message"
+        ).textContent =
+            `Practice loop updated: notes ${startIndex + 1}–${endIndex + 1}. Analyse again to score only this section.`;
+
+        applyActiveCoachLoopToUI();
+        highlightRecommendedLoopOnTimeline();
+        saveCoachingState();
+        renderProgress();
+    }
+
+    clearScorecardLoopPreview();
+
+    scorecardLoopDrawActive = false;
+    scorecardLoopDrawStartIndex = null;
+    scorecardLoopDrawCurrentIndex = null;
+
+    try {
+        viewport?.releasePointerCapture(
+            event.pointerId
+        );
+    } catch (error) {
+        // Ignore.
+    }
+
+    event.preventDefault();
+}
+
+
 function beginPracticeTimelineDrag(
     event
 ) {
@@ -2109,6 +3919,28 @@ function beginPracticeTimelineDrag(
 
     if (!viewport) {
         return;
+    }
+
+    const selectable =
+        event.target.closest(
+            ".practice-note[data-note-index], .practice-bar[data-note-index]"
+        );
+
+    if (selectable) {
+
+        const noteIndex =
+            parseInt(
+                selectable.dataset.noteIndex,
+                10
+            );
+
+        if (Number.isFinite(noteIndex)) {
+            beginScorecardLoopDraw(
+                event,
+                noteIndex
+            );
+            return;
+        }
     }
 
     practiceTimelineDragging =
@@ -2138,6 +3970,13 @@ function movePracticeTimelineDrag(
     event
 ) {
 
+    if (scorecardLoopDrawActive) {
+        moveScorecardLoopDraw(
+            event
+        );
+        return;
+    }
+
     if (!practiceTimelineDragging) {
         return;
     }
@@ -2166,6 +4005,13 @@ function movePracticeTimelineDrag(
 function endPracticeTimelineDrag(
     event
 ) {
+
+    if (scorecardLoopDrawActive) {
+        endScorecardLoopDraw(
+            event
+        );
+        return;
+    }
 
     if (!practiceTimelineDragging) {
         return;
@@ -2314,115 +4160,240 @@ function findRecommendedLoop(results) {
     }
 
     /*
-     * Look for a useful contiguous window rather than a list
-     * of every imperfect note. Try 3–6 note windows and choose
-     * the highest average severity with a small bonus for compactness.
+     * A note is considered genuinely weak when its combined
+     * severity is high enough to merit focused practice.
      */
-    const minWindow =
+    const weakThreshold = 35;
+
+    const weakFlags =
+        results.map(
+            result =>
+                issueSeverity(result) >=
+                weakThreshold
+        );
+
+    /*
+     * Find the longest contiguous weak run.
+     * If the learner gets 8 notes wrong in a row, this returns
+     * all 8 rather than always collapsing to a 3-note loop.
+     */
+    let bestRunStart = -1;
+    let bestRunEnd = -1;
+    let currentStart = -1;
+
+    for (
+        let index = 0;
+        index <= weakFlags.length;
+        index++
+    ) {
+
+        const weak =
+            index < weakFlags.length
+                ? weakFlags[index]
+                : false;
+
+        if (
+            weak &&
+            currentStart < 0
+        ) {
+            currentStart =
+                index;
+        }
+
+        if (
+            !weak &&
+            currentStart >= 0
+        ) {
+
+            const end =
+                index - 1;
+
+            if (
+                bestRunStart < 0 ||
+                (
+                    end -
+                    currentStart
+                ) >
+                (
+                    bestRunEnd -
+                    bestRunStart
+                )
+            ) {
+                bestRunStart =
+                    currentStart;
+
+                bestRunEnd =
+                    end;
+            }
+
+            currentStart = -1;
+        }
+    }
+
+    /*
+     * If there is a real weak run, use it.
+     * Pad very short runs to at least 3 notes when possible,
+     * but do not shrink longer runs.
+     */
+    if (
+        bestRunStart >= 0
+    ) {
+
+        let startIndex =
+            bestRunStart;
+
+        let endIndex =
+            bestRunEnd;
+
+        while (
+            (
+                endIndex -
+                startIndex +
+                1
+            ) < 3 &&
+            (
+                startIndex > 0 ||
+                endIndex <
+                    results.length - 1
+            )
+        ) {
+
+            if (startIndex > 0) {
+                startIndex--;
+            }
+
+            if (
+                (
+                    endIndex -
+                    startIndex +
+                    1
+                ) < 3 &&
+                endIndex <
+                    results.length - 1
+            ) {
+                endIndex++;
+            }
+        }
+
+        const segment =
+            results.slice(
+                startIndex,
+                endIndex + 1
+            );
+
+        return {
+            startIndex,
+            endIndex,
+            startNote:
+                results[
+                    startIndex
+                ].expected.pitch,
+            endNote:
+                results[
+                    endIndex
+                ].expected.pitch,
+            issue:
+                dominantIssue(
+                    segment
+                ),
+            speed:
+                recommendedSpeedFor(
+                    segment
+                ),
+            severity:
+                segment.reduce(
+                    (sum, result) =>
+                        sum +
+                        issueSeverity(
+                            result
+                        ),
+                    0
+                ) /
+                segment.length
+        };
+    }
+
+    /*
+     * No major weak run: choose the worst compact 3-note
+     * section as a polish recommendation.
+     */
+    const size =
         Math.min(
             3,
             results.length
         );
 
-    const maxWindow =
-        Math.min(
-            6,
-            results.length
-        );
-
-    let best = null;
+    let bestStart = 0;
+    let bestScore = -Infinity;
 
     for (
-        let size = minWindow;
-        size <= maxWindow;
-        size++
+        let start = 0;
+        start <=
+            results.length -
+            size;
+        start++
     ) {
 
-        for (
-            let start = 0;
-            start <= results.length - size;
-            start++
-        ) {
+        const segment =
+            results.slice(
+                start,
+                start + size
+            );
 
-            const segment =
-                results.slice(
-                    start,
-                    start + size
-                );
+        const average =
+            segment.reduce(
+                (sum, result) =>
+                    sum +
+                    issueSeverity(
+                        result
+                    ),
+                0
+            ) /
+            size;
 
-            const severitySum =
-                segment.reduce(
-                    (sum, result) =>
-                        sum +
-                        issueSeverity(result),
-                    0
-                );
-
-            const averageSeverity =
-                severitySum /
-                size;
-
-            /*
-             * Prefer concentrated problem areas rather than
-             * sprawling sections with the same average.
-             */
-            const compactnessBonus =
-                (maxWindow - size) * 2;
-
-            const score =
-                averageSeverity +
-                compactnessBonus;
-
-            if (
-                !best ||
-                score > best.score
-            ) {
-                best = {
-                    score,
-                    startIndex: start,
-                    endIndex:
-                        start + size - 1,
-                    segment,
-                    averageSeverity
-                };
-            }
+        if (average > bestScore) {
+            bestScore =
+                average;
+            bestStart =
+                start;
         }
     }
 
-    if (!best) {
-        return null;
-    }
+    const segment =
+        results.slice(
+            bestStart,
+            bestStart + size
+        );
 
-    /*
-     * If the phrase was nearly perfect, still offer a short
-     * polish loop instead of pretending there is a major weakness.
-     */
     return {
         startIndex:
-            best.startIndex,
+            bestStart,
         endIndex:
-            best.endIndex,
+            bestStart +
+            size -
+            1,
         startNote:
             results[
-                best.startIndex
+                bestStart
             ].expected.pitch,
         endNote:
             results[
-                best.endIndex
+                bestStart +
+                size -
+                1
             ].expected.pitch,
         issue:
             dominantIssue(
-                best.segment
+                segment
             ),
         speed:
             recommendedSpeedFor(
-                best.segment
+                segment
             ),
         severity:
-            best.averageSeverity
+            bestScore
     };
 }
-
 
 function updatePracticeLoopRecommendation(
     results
@@ -2487,6 +4458,73 @@ function updatePracticeLoopRecommendation(
         message.textContent =
             `I recommend looping notes ${recommendedLoop.startIndex + 1}–${recommendedLoop.endIndex + 1}. The main issue in this section is ${recommendedLoop.issue.toLowerCase()}, so start at ${recommendedLoop.speed} speed.`;
     }
+}
+
+
+function practiseRecommendedLoop() {
+
+    if (
+        !recommendedLoop ||
+        !loadedMusicXMLText
+    ) {
+        return;
+    }
+
+    const startNote =
+        loadedPhrase[
+            recommendedLoop.startIndex
+        ];
+
+    const endNote =
+        loadedPhrase[
+            recommendedLoop.endIndex
+        ];
+
+    if (!startNote || !endNote) {
+        return;
+    }
+
+    localStorage.setItem(
+        "ymtPracticeMusicXML",
+        loadedMusicXMLText
+    );
+
+    localStorage.setItem(
+        "ymtPracticeMusicXMLName",
+        loadedMusicXMLName
+    );
+
+    localStorage.setItem(
+        "ymtPracticeInstrument",
+        "alto-sax"
+    );
+
+    const speedMap = {
+        "50%": "0.5",
+        "75%": "0.75",
+        "100%": "1"
+    };
+
+    const params =
+        new URLSearchParams({
+            practiceFromScorecard: "1",
+            loopStartBeat:
+                String(
+                    startNote.startBeats
+                ),
+            loopEndBeat:
+                String(
+                    endNote.startBeats +
+                    endNote.durationBeats
+                ),
+            speed:
+                speedMap[
+                    recommendedLoop.speed
+                ] || "0.75"
+        });
+
+    window.location.href =
+        `/?${params.toString()}`;
 }
 
 
@@ -2849,6 +4887,42 @@ document.addEventListener(
         );
 
         document.getElementById(
+            "expand-before"
+        )?.addEventListener(
+            "click",
+            () =>
+                expandActiveLoop(
+                    1,
+                    0
+                )
+        );
+
+        document.getElementById(
+            "expand-after"
+        )?.addEventListener(
+            "click",
+            () =>
+                expandActiveLoop(
+                    0,
+                    1
+                )
+        );
+
+        document.getElementById(
+            "expand-both"
+        )?.addEventListener(
+            "click",
+            () =>
+                expandActiveLoop(
+                    1,
+                    1
+                )
+        );
+
+        restoreCoachingFromTutorial();
+
+
+        document.getElementById(
             "apply-loop"
         ).addEventListener(
             "click",
@@ -2860,6 +4934,22 @@ document.addEventListener(
         ).addEventListener(
             "click",
             clearLoopHighlight
+        );
+
+        document.getElementById(
+            "undo-loop"
+        )?.addEventListener(
+            "click",
+            undoLoopChange
+        );
+
+        updateUndoButton();
+
+        document.getElementById(
+            "practise-loop"
+        ).addEventListener(
+            "click",
+            practiseRecommendedLoop
         );
 
         const practiceTimeline =

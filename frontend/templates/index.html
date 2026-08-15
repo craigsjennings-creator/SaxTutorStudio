@@ -673,7 +673,46 @@
     box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
     z-index: 10;
 }
-    </style>
+    
+/* Coaching call-to-action */
+.coaching-cta {
+    margin: 34px auto 8px;
+    padding: 26px;
+    border: 1px solid #30343d;
+    border-radius: 16px;
+    background: #171a21;
+    text-align: center;
+}
+
+.coaching-cta h2 {
+    margin: 0 0 8px;
+    font-size: 24px;
+}
+
+.coaching-cta p {
+    margin: 0 auto 18px;
+    max-width: 720px;
+    color: #aab2c0;
+    line-height: 1.55;
+}
+
+.coaching-cta-button {
+    display: inline-block;
+    cursor: pointer;
+    padding: 12px 20px;
+    border-radius: 9px;
+    background: #4f7cff;
+    color: white;
+    font-weight: 800;
+    text-decoration: none;
+    border: 1px solid #4f7cff;
+}
+
+.coaching-cta-button:hover {
+    background: #638cff;
+}
+
+</style>
 
     
 
@@ -1627,8 +1666,168 @@ window.addEventListener(
 );
 
 
+window.addEventListener(
+    "load",
+    () => {
+
+        document.getElementById(
+            "analyse-current-song"
+        )?.addEventListener(
+            "click",
+            openCoachingForCurrentSong
+        );
+
+        document.getElementById(
+            "musicFile"
+        )?.addEventListener(
+            "change",
+            cacheSelectedTutorialForCoaching
+        );
+    }
+);
+
+
+
+/*
+ * Send the currently loaded tutorial and active practice loop
+ * to the coaching scorecard without making the user upload again.
+ */
+
+/*
+ * Keep the currently selected MusicXML available for seamless coaching.
+ * Cache on file selection so Analyse My Playing can always recover it.
+ */
+async function cacheSelectedTutorialForCoaching() {
+
+    const input =
+        document.getElementById(
+            "musicFile"
+        );
+
+    const file =
+        input?.files?.[0];
+
+    if (!file) {
+        return;
+    }
+
+    try {
+
+        const xml =
+            await file.text();
+
+        localStorage.setItem(
+            "ymtCurrentMusicXML",
+            xml
+        );
+
+        localStorage.setItem(
+            "ymtCurrentMusicXMLName",
+            file.name ||
+            "tutorial.musicxml"
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "Could not cache MusicXML for coaching:",
+            error
+        );
+    }
+}
+
+async function openCoachingForCurrentSong() {
+
+    /*
+     * First refresh the cache from the actual upload control.
+     * This fixes tutorials that were already loaded before the
+     * coaching bridge stored its browser state.
+     */
+    await cacheSelectedTutorialForCoaching();
+
+    const storedXML =
+        localStorage.getItem(
+            "ymtCurrentMusicXML"
+        );
+
+    if (!storedXML) {
+        alert(
+            "Load a tutorial first, then choose Analyse My Playing."
+        );
+        return;
+    }
+
+    const coachingState =
+        typeof window.getTutorialCoachingState === "function"
+            ? window.getTutorialCoachingState()
+            : {
+                loopActive: false,
+                startBeat: 0,
+                endBeat: 0
+            };
+
+    const bounds = {
+        startBeat:
+            coachingState.startBeat,
+        endBeat:
+            coachingState.endBeat
+    };
+
+    const loopActive =
+        coachingState.loopActive;
+
+    const speed =
+        document.getElementById(
+            "speed"
+        )?.value || "1";
+
+    localStorage.setItem(
+        "ymtCoachLoopActive",
+        loopActive ? "1" : "0"
+    );
+
+    localStorage.setItem(
+        "ymtCoachLoopStartBeat",
+        String(
+            bounds.startBeat ?? 0
+        )
+    );
+
+    localStorage.setItem(
+        "ymtCoachLoopEndBeat",
+        String(
+            bounds.endBeat ?? 0
+        )
+    );
+
+    localStorage.setItem(
+        "ymtCoachSpeed",
+        speed
+    );
+
+    window.location.href =
+        "/static/listen-score-musicxml.html?fromTutorial=1";
+}
+
 </script>
 <script src="/static/js/fingering.js?v=5"></script>
-<script src="/static/js/player.js?v=15"></script>
+
+<div class="coaching-cta" id="coaching-cta">
+    <h2>🎯 Want coaching on this song?</h2>
+    <p>
+        See how accurate your notes, tuning, timing and note lengths are.
+        YourMusicTutorial will then recommend the section that would benefit
+        most from practice.
+    </p>
+    <button
+        class="coaching-cta-button"
+        id="analyse-current-song"
+        type="button"
+    >
+        Analyse My Playing
+    </button>
+</div>
+
+<script src="/static/js/player.js?v=17"></script>
 </body>
 </html>

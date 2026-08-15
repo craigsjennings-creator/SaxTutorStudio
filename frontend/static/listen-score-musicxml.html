@@ -272,6 +272,51 @@
             border-color: #444b57;
         }
 
+        .progress-card {
+            margin-top: 18px;
+            padding: 18px;
+            border-radius: 12px;
+            background: #15181e;
+            border: 1px solid #30343d;
+        }
+
+        .progress-title {
+            font-size: 18px;
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+
+        .progress-history {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 10px 0 14px;
+        }
+
+        .attempt-pill {
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: #20242b;
+            color: #d8deea;
+            font-size: 13px;
+        }
+
+        .expand-actions {
+            display: none;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .expand-actions.show {
+            display: flex;
+        }
+
+        .expand-actions button {
+            width: auto;
+            margin-top: 0;
+        }
+
         .practice-timeline-wrap {
             margin-top: 18px;
             border: 1px solid #30343d;
@@ -340,9 +385,30 @@
 
         .practice-bar.loop-range {
             box-shadow:
-                0 0 0 3px rgba(255,255,255,0.8),
                 0 0 16px rgba(79,124,255,0.8);
             background: #6e91ff;
+        }
+
+        .practice-note,
+        .practice-bar {
+            cursor: pointer;
+        }
+
+        .practice-timeline-viewport.loop-drawing,
+        .practice-timeline-viewport.loop-drawing .practice-note,
+        .practice-timeline-viewport.loop-drawing .practice-bar {
+            cursor: crosshair;
+        }
+
+        .practice-bar.loop-preview {
+            background: #88a5ff;
+            box-shadow:
+                0 0 16px rgba(136,165,255,0.65);
+        }
+
+        .practice-loop-shade.loop-preview {
+            background: rgba(79,124,255,0.20);
+            border-color: rgba(136,165,255,0.75);
         }
 
         .practice-loop-shade {
@@ -443,7 +509,73 @@
                 grid-column: 3;
             }
         }
-    </style>
+    
+.attempt-comparison-card {
+    margin-top: 18px;
+    padding: 18px;
+    border-radius: 12px;
+    background: #15181e;
+    border: 1px solid #30343d;
+}
+
+.attempt-comparison-title {
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.attempt-comparison-banner {
+    margin-bottom: 14px;
+    color: #d8deea;
+    line-height: 1.6;
+}
+
+.attempt-comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+}
+
+.attempt-comparison-stat {
+    padding: 12px;
+    background: #111318;
+    border-radius: 10px;
+}
+
+.attempt-comparison-label {
+    color: #8f98a8;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
+.attempt-comparison-value {
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.attempt-comparison-note {
+    margin-top: 14px;
+    color: #aab2c0;
+    line-height: 1.55;
+}
+
+.delta-positive { color: #73df9a; }
+.delta-negative { color: #ff7f87; }
+.delta-neutral  { color: #ffd36d; }
+
+@media (max-width: 850px) {
+    .attempt-comparison-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 520px) {
+    .attempt-comparison-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+</style>
 </head>
 <body>
 <div class="container">
@@ -559,7 +691,7 @@
 
             <div class="practice-timeline-wrap">
                 <div class="practice-timeline-header">
-                    Recommended loop on the tutorial timeline
+                    Recommended loop on the tutorial timeline — or draw your own
                 </div>
 
                 <div
@@ -580,6 +712,18 @@
                     Use This Loop
                 </button>
 
+                <button id="practise-loop">
+                    ▶ Practise This Section
+                </button>
+
+                <button
+                    id="undo-loop"
+                    class="secondary"
+                    disabled
+                >
+                    ↶ Undo Loop Change
+                </button>
+
                 <button
                     id="clear-loop"
                     class="secondary"
@@ -587,6 +731,88 @@
                     Clear Highlight
                 </button>
             </div>
+        </div>
+
+
+        <div class="progress-card">
+            <div class="progress-title">
+                📈 Practice Progress
+            </div>
+
+            <div id="progress-message">
+                Score this section, practise it, then come back and score it again.
+            </div>
+
+            <div
+                class="progress-history"
+                id="progress-history"
+            ></div>
+
+            <div
+                class="expand-actions"
+                id="expand-actions"
+            >
+                <button id="expand-before">
+                    +1 note before
+                </button>
+
+                <button id="expand-after">
+                    +1 note after
+                </button>
+
+                <button id="expand-both">
+                    Expand both sides
+                </button>
+            </div>
+        </div>
+
+
+        <div
+            class="attempt-comparison-card"
+            id="attempt-comparison-card"
+        >
+            <div class="attempt-comparison-title">
+                🔎 Attempt Comparison
+            </div>
+
+            <div
+                class="attempt-comparison-banner"
+                id="attempt-comparison-banner"
+            >
+                Complete at least two scored attempts and I’ll compare them here.
+            </div>
+
+            <div class="attempt-comparison-grid">
+                <div class="attempt-comparison-stat">
+                    <div class="attempt-comparison-label">Overall</div>
+                    <div class="attempt-comparison-value" id="compare-overall">--</div>
+                </div>
+
+                <div class="attempt-comparison-stat">
+                    <div class="attempt-comparison-label">Note accuracy</div>
+                    <div class="attempt-comparison-value" id="compare-notes">--</div>
+                </div>
+
+                <div class="attempt-comparison-stat">
+                    <div class="attempt-comparison-label">Tuning</div>
+                    <div class="attempt-comparison-value" id="compare-tuning">--</div>
+                </div>
+
+                <div class="attempt-comparison-stat">
+                    <div class="attempt-comparison-label">Timing</div>
+                    <div class="attempt-comparison-value" id="compare-timing">--</div>
+                </div>
+
+                <div class="attempt-comparison-stat">
+                    <div class="attempt-comparison-label">Duration</div>
+                    <div class="attempt-comparison-value" id="compare-duration">--</div>
+                </div>
+            </div>
+
+            <div
+                class="attempt-comparison-note"
+                id="attempt-comparison-note"
+            ></div>
         </div>
 
         <div class="results-wrap">
@@ -609,6 +835,15 @@
     </div>
 </div>
 
-<script src="/static/js/listen_score_musicxml.js?v=3"></script>
+<script src="/static/js/listen_score_musicxml.js?v=9"></script>
 </body>
 </html>
+
+<style>
+/* Active coaching loop is indicated by highlighted note bars only.
+   Suppress the old translucent range rectangle to avoid a second,
+   misleading loop boundary. */
+.practice-loop-shade {
+    display: none !important;
+}
+</style>

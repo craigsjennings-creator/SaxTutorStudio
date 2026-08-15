@@ -1765,6 +1765,195 @@ function nextNote() {
    Public loader
    ========================================================= */
 
+function applyScorecardPracticeRequest() {
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    if (
+        params.get(
+            "practiceFromScorecard"
+        ) !== "1"
+    ) {
+        return;
+    }
+
+    const requestedStartBeat =
+        parseFloat(
+            params.get(
+                "loopStartBeat"
+            )
+        );
+
+    const requestedEndBeat =
+        parseFloat(
+            params.get(
+                "loopEndBeat"
+            )
+        );
+
+    if (
+        !Number.isFinite(
+            requestedStartBeat
+        ) ||
+        !Number.isFinite(
+            requestedEndBeat
+        )
+    ) {
+        return;
+    }
+
+    const playable =
+        getPlayableNoteIndexes();
+
+    if (!playable.length) {
+        return;
+    }
+
+    let startItem =
+        playable[0];
+
+    let endItem =
+        playable[
+            playable.length - 1
+        ];
+
+    let startDistance =
+        Infinity;
+
+    let endDistance =
+        Infinity;
+
+    playable.forEach(item => {
+
+        const note =
+            item.note;
+
+        const noteStart =
+            note.offset;
+
+        const noteEnd =
+            note.offset +
+            note.duration;
+
+        const candidateStartDistance =
+            Math.abs(
+                noteStart -
+                requestedStartBeat
+            );
+
+        const candidateEndDistance =
+            Math.abs(
+                noteEnd -
+                requestedEndBeat
+            );
+
+        if (
+            candidateStartDistance <
+            startDistance
+        ) {
+            startDistance =
+                candidateStartDistance;
+
+            startItem =
+                item;
+        }
+
+        if (
+            candidateEndDistance <
+            endDistance
+        ) {
+            endDistance =
+                candidateEndDistance;
+
+            endItem =
+                item;
+        }
+    });
+
+    const loopEnabled =
+        document.getElementById(
+            "loop-enabled"
+        );
+
+    const loopStart =
+        document.getElementById(
+            "loop-start"
+        );
+
+    const loopEnd =
+        document.getElementById(
+            "loop-end"
+        );
+
+    if (loopEnabled) {
+        loopEnabled.checked =
+            true;
+    }
+
+    if (loopStart) {
+        loopStart.disabled =
+            false;
+    }
+
+    if (loopEnd) {
+        loopEnd.disabled =
+            false;
+    }
+
+    setLoopRange(
+        startItem.index,
+        endItem.index
+    );
+
+    timelineLoopClickStage =
+        "start";
+
+    loopHasCountedIn =
+        false;
+
+    refreshTimelineLoopHighlight();
+
+    const requestedSpeed =
+        params.get(
+            "speed"
+        );
+
+    const speedSelect =
+        document.getElementById(
+            "speed"
+        );
+
+    if (
+        requestedSpeed &&
+        speedSelect
+    ) {
+        speedSelect.value =
+            requestedSpeed;
+    }
+
+    pausedMusicalBeats =
+        getLoopBounds().startBeat;
+
+    if (
+        window
+            .setTimelineBeatPosition
+    ) {
+        window.setTimelineBeatPosition(
+            pausedMusicalBeats
+        );
+    }
+
+    window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname
+    );
+}
+
+
 function loadTutorialPlayer(notes) {
 
     tutorialNotes = notes;
@@ -1783,6 +1972,8 @@ function loadTutorialPlayer(notes) {
     loopHasCountedIn = false;
     timelineLoopClickStage = "start";
     populateLoopSelectors();
+
+    applyScorecardPracticeRequest();
 
     /*
      * If the browser has already created an AudioContext,
@@ -2861,3 +3052,31 @@ window.loadTutorialPlayer =
 
 window.handleTimelineLoopClick =
     handleTimelineLoopClick;
+
+
+/*
+ * Public coaching-state helpers.
+ * No selected loop => coaching scores the whole song.
+ * Selected loop    => coaching scores only the active range.
+ */
+window.getTutorialCoachingState = function () {
+
+    const enabled =
+        isLoopEnabled();
+
+    const bounds =
+        getLoopBounds();
+
+    return {
+        loopActive:
+            enabled,
+        startBeat:
+            enabled
+                ? bounds.startBeat
+                : 0,
+        endBeat:
+            enabled
+                ? bounds.endBeat
+                : getTotalBeats()
+    };
+};
