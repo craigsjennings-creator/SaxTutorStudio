@@ -554,9 +554,21 @@
     will-change: transform;
 }
 
-.finger-bar.active {
+/*
+ * Fingering colours
+ *
+ * Left hand main keys  = blue
+ * Right hand main keys = teal
+ * Auxiliary / less-used keys = amber
+ */
+.finger-bar.active.left-hand {
     background: #4f7cff;
     box-shadow: 0 0 12px rgba(79, 124, 255, 0.35);
+}
+
+.finger-bar.active.right-hand {
+    background: #28b8aa;
+    box-shadow: 0 0 12px rgba(40, 184, 170, 0.32);
 }
 
 /*
@@ -566,23 +578,54 @@
 .finger-bar.auxiliary {
     height: 20px;
     top: 17px;
+    background: #d59a3a;
+    box-shadow: 0 0 10px rgba(213, 154, 58, 0.28);
 }
 
-.finger-bar.loop-selected {
-    box-shadow:
-        0 0 0 2px rgba(141, 176, 255, 0.7),
-        0 0 14px rgba(79, 124, 255, 0.45);
+/*
+ * Loop highlighting keeps the identity of each key group,
+ * but uses a lighter/brighter shade rather than a white outline.
+ */
+.finger-bar.left-hand.loop-selected,
+.finger-bar.left-hand.loop-start,
+.finger-bar.left-hand.loop-end {
+    background: #7899ff;
+    box-shadow: 0 0 16px rgba(120, 153, 255, 0.60);
 }
 
-.finger-bar.loop-start,
-.finger-bar.loop-end {
-    box-shadow:
-        0 0 0 3px rgba(255, 255, 255, 0.8),
-        0 0 16px rgba(79, 124, 255, 0.6);
+.finger-bar.right-hand.loop-selected,
+.finger-bar.right-hand.loop-start,
+.finger-bar.right-hand.loop-end {
+    background: #58d3c5;
+    box-shadow: 0 0 16px rgba(88, 211, 197, 0.55);
 }
 
-.timeline-note.loop-preview,
-.finger-bar.loop-preview {
+.finger-bar.auxiliary.loop-selected,
+.finger-bar.auxiliary.loop-start,
+.finger-bar.auxiliary.loop-end {
+    background: #efbd68;
+    box-shadow: 0 0 14px rgba(239, 189, 104, 0.52);
+}
+
+/*
+ * Live drag-to-draw preview uses an even softer shade.
+ */
+.finger-bar.left-hand.loop-preview {
+    background: #91abff;
+    box-shadow: 0 0 13px rgba(145, 171, 255, 0.45);
+}
+
+.finger-bar.right-hand.loop-preview {
+    background: #76ded3;
+    box-shadow: 0 0 13px rgba(118, 222, 211, 0.42);
+}
+
+.finger-bar.auxiliary.loop-preview {
+    background: #f4cc86;
+    box-shadow: 0 0 12px rgba(244, 204, 134, 0.40);
+}
+
+.timeline-note.loop-preview {
     background: rgba(79, 124, 255, 0.22);
     box-shadow:
         0 0 0 2px rgba(141, 176, 255, 0.55),
@@ -1224,17 +1267,41 @@ function buildTutorialTimeline(notes) {
                 }
             );
 
-            const mainFingerKeys = [
+            const leftMainKeys = [
                 "left_1",
                 "left_2",
-                "left_3",
+                "left_3"
+            ];
+
+            const rightMainKeys = [
                 "right_1",
                 "right_2",
                 "right_3"
             ];
 
-            if (!mainFingerKeys.includes(key)) {
-                bar.classList.add("auxiliary");
+            if (leftMainKeys.includes(key)) {
+
+                bar.classList.add(
+                    "left-hand"
+                );
+
+            } else if (
+                rightMainKeys.includes(key)
+            ) {
+
+                bar.classList.add(
+                    "right-hand"
+                );
+
+            } else {
+
+                /*
+                 * Palm, octave and other less-used keys
+                 * keep the thinner auxiliary-bar style.
+                 */
+                bar.classList.add(
+                    "auxiliary"
+                );
             }
 
             bar.style.left = `${startPixels}px`;
@@ -1436,9 +1503,132 @@ window.seekTimelineToBeat = seekTimelineToBeat;
 window.setTimelineBeatPosition = setTimelineBeatPosition;
 
 
+/*
+ * Restore a tutorial sent from the coaching scorecard.
+ * The original MusicXML remains the single source of truth.
+ */
+async function restorePracticeFromScorecard() {
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    if (
+        params.get(
+            "practiceFromScorecard"
+        ) !== "1"
+    ) {
+        return;
+    }
+
+    const xml =
+        localStorage.getItem(
+            "ymtPracticeMusicXML"
+        );
+
+    if (!xml) {
+        console.warn(
+            "No stored MusicXML was found for scorecard practice."
+        );
+        return;
+    }
+
+    const filename =
+        localStorage.getItem(
+            "ymtPracticeMusicXMLName"
+        ) ||
+        "tutorial.musicxml";
+
+    const instrument =
+        localStorage.getItem(
+            "ymtPracticeInstrument"
+        ) ||
+        "alto-sax";
+
+    const instrumentButton =
+        document.querySelector(
+            `.instrument[data-instrument="${instrument}"]`
+        );
+
+    if (instrumentButton) {
+
+        document
+            .querySelectorAll(
+                ".instrument"
+            )
+            .forEach(
+                button =>
+                    button.classList.remove(
+                        "selected"
+                    )
+            );
+
+        instrumentButton.classList.add(
+            "selected"
+        );
+
+        selectedInstrument =
+            instrument;
+    }
+
+    const file =
+        new File(
+            [xml],
+            filename,
+            {
+                type:
+                    "application/vnd.recordare.musicxml+xml"
+            }
+        );
+
+    const transfer =
+        new DataTransfer();
+
+    transfer.items.add(
+        file
+    );
+
+    const fileInput =
+        document.getElementById(
+            "musicFile"
+        );
+
+    fileInput.files =
+        transfer.files;
+
+    const speed =
+        params.get(
+            "speed"
+        );
+
+    const speedSelect =
+        document.getElementById(
+            "speed"
+        );
+
+    if (
+        speed &&
+        speedSelect
+    ) {
+        speedSelect.value =
+            speed;
+    }
+
+    await createTutorial();
+}
+
+
+window.addEventListener(
+    "load",
+    () => {
+        restorePracticeFromScorecard();
+    }
+);
+
 
 </script>
 <script src="/static/js/fingering.js?v=5"></script>
-<script src="/static/js/player.js?v=13"></script>
+<script src="/static/js/player.js?v=15"></script>
 </body>
 </html>
